@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <!-- White icon variant for dark/colored backgrounds (transparent bg) -->
+  <path d="M88 52 L168 52 L192 76 L192 204 L88 204 Z" fill="#FFFFFF"/>
+  <path d="M168 52 L168 76 L192 76 Z" fill="rgba(255,255,255,0.6)"/>
+  <path d="M104 168 C108 148 124 142 136 154 C148 166 160 142 172 120"
+        stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <circle cx="148" cy="186" r="14" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+  <path d="M141 186 L146 191 L155 182" stroke="#FFFFFF" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

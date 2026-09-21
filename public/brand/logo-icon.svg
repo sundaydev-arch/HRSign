@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <!-- Brand background: rounded square in signature blue -->
+  <rect width="256" height="256" rx="56" fill="#2563EB"/>
+
+  <!-- Document body with folded top-right corner -->
+  <path d="M88 52 L168 52 L192 76 L192 204 L88 204 Z" fill="#FFFFFF"/>
+
+  <!-- Fold shadow (subtle blue tint on the folded triangle) -->
+  <path d="M168 52 L168 76 L192 76 Z" fill="#DBEAFE"/>
+
+  <!-- Signature pen stroke: conveys the signing action -->
+  <path d="M104 168 C108 148 124 142 136 154 C148 166 160 142 172 120"
+        stroke="#2563EB" stroke-width="14" stroke-linecap="round" fill="none"/>
+
+  <!-- Seal checkmark: conveys the sealing/stamp action -->
+  <circle cx="148" cy="186" r="14" fill="none" stroke="#2563EB" stroke-width="5"/>
+  <path d="M141 186 L146 191 L155 182" stroke="#2563EB" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

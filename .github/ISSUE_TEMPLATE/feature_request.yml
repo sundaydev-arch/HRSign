@@ -1,0 +1,57 @@
+name: Feature request
+description: Suggest an enhancement or new feature for HRSign
+title: "[Feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please check the
+        [product specification](../blob/main/docs/requirements/product-spec.md)
+        and roadmap first — the feature may already be planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem or workflow pain does this solve? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you would like, with user-visible behavior and (if relevant) API/data-model changes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches or workarounds have you considered?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Does this affect?
+      multiple: true
+      options:
+        - Phase 1 core workflow (templates/tasks/signing)
+        - External signers
+        - Providers (storage / notification / identity / signature)
+        - Open API / webhooks
+        - UI / UX / internationalization
+        - Deployment / operations
+        - Phase 2 compliant signatures (PAdES / SM2)
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution intent
+      options:
+        - label: I would be willing to implement this with maintainer guidance
+          required: false
