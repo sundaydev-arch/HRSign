@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: HRSign API
+  version: 0.2.0
+  description: |
+    Public and API-key authenticated routes for HRSign.
+    Authenticate with a session cookie (browser) or `Authorization: Bearer hrs_…` API key.
+servers:
+  - url: http://localhost:3000
+    description: Local
+paths:
+  /api/dashboard:
+    get:
+      summary: Workspace KPI counters
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: pendingApprove, pendingSign, expiring7d, completed30d
+  /api/admin/settings:
+    get:
+      summary: App settings (watermark, signature method, notify channels)
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Settings payload
+    patch:
+      summary: Update app settings
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Updated settings
+  /api/templates/{id}/ocr:
+    post:
+      summary: Best-effort OCR/text extract PDF overlay → DOCUMENT mode
+      security:
+        - SessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Converted
+        "400":
+          description: OCR_NO_TEXT or not overlay mode
+  /api/admin/webhooks/{id}/deliveries:
+    get:
+      summary: List recent webhook deliveries
+      security:
+        - SessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deliveries
+  /api/health:
+    get:
+      summary: Health probe
+      security: []
+      responses:
+        "200":
+          description: Database reachable
+        "503":
+          description: Degraded
+  /api/tasks:
+    get:
+      summary: List signing tasks
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+      parameters:
+        - in: query
+          name: tab
+          schema:
+            type: string
+            enum: [all, mine, pending-approve, pending-sign]
+      responses:
+        "200":
+          description: Task list
+    post:
+      summary: Create a signing task
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTask"
+      responses:
+        "200":
+          description: Created
+  /api/tasks/batch:
+    post:
+      summary: Batch create signing tasks
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tasks]
+              properties:
+                tasks:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/CreateTask"
+      responses:
+        "200":
+          description: Batch result
+  /api/admin/api-keys:
+    get:
+      summary: List API keys
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Keys (no secrets)
+    post:
+      summary: Create API key
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Key + one-time plaintext
+  /api/admin/webhooks:
+    get:
+      summary: List webhooks
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Webhooks
+    post:
+      summary: Create webhook
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Webhook + one-time signing secret
+  /api/sign/external/{token}:
+    get:
+      summary: External signing page data
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task payload
+    post:
+      summary: External handwritten sign (requires prior email verification)
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signed
+  /api/sign/external/{token}/verify:
+    post:
+      summary: Send email verification code
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: verificationId issued
+    put:
+      summary: Check email verification code
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verification status
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: hrs_
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+  schemas:
+    CreateTask:
+      type: object
+      required: [templateId, title, flowType, expiresAt, signers]
+      properties:
+        templateId:
+          type: string
+        title:
+          type: string
+        flowType:
+          type: string
+          enum: [SEQUENTIAL, PARALLEL]
+        expiresAt:
+          type: string
+          format: date-time
+        formValues:
+          type: object
+          additionalProperties:
+            type: string
+        signers:
+          type: array
+          items:
+            type: object
+            required: [signRole]
+            properties:
+              signRole:
+                type: string
+                enum: [APPROVER, COMPANY_SEAL, PERSONAL_SIGNATURE]
+              userId:
+                type: string
+              externalFullName:
+                type: string
+              externalEmail:
+                type: string
+                format: email

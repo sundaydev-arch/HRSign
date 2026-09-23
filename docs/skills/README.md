@@ -1,27 +1,32 @@
-# 智能体通用技能（Skills）
+# Shared Agent Skills
 
-每个技能是一份"在本仓库做某类改动时必须遵守的操作手册"，包含：触发场景、硬规则、标准步骤、禁忌。
-技能之间可组合（如"新增发起表单字段"会同时用到 01、03、05、06）。
+These are **generic engineering skills** for this repo’s stack (Next.js App Router, Prisma, zod, shadcn, i18n, PDF pipeline). They describe *how to change code*, not product roadmap, demo scripts, or one-off plans.
 
-| # | 技能 | 触发场景 |
+Keep them that way:
+- Prefer stack/convention rules over feature names or temporary milestones
+- Cite real paths in this repo; avoid marketing/copy-paste from plans
+- Compose skills (e.g. a form change may use 01 + 05 + 06)
+- Do not turn skills into release checklists or persona walkthroughs
+
+| # | Skill | Trigger |
 |---|---|---|
-| 01 | [Schema 与 Zod 约定](./01-schema-zod/SKILL.md) | 改 Prisma 模型/枚举、读写 Json 列、写外部输入校验 |
-| 02 | [双状态机](./02-state-machines/SKILL.md) | 任何审批/签署/签署人状态变化、顺序签轮次 |
-| 03 | [PDF 处理管线](./03-pdf-pipeline/SKILL.md) | 模板字段、填充、坐标、盖章、水印、签名、字体 |
-| 04 | [认证、RBAC 与外部令牌](./04-auth-rbac/SKILL.md) | 登录鉴权、角色权限、免登录链接、文件访问控制 |
-| 05 | [国际化 i18n](./05-i18n/SKILL.md) | 界面文案、日期数字金额、消息文件 |
-| 06 | [shadcn 表单与 UI 范式](./06-shadcn-forms/SKILL.md) | 新建/修改表单、页面布局、loading/错误/空态 |
-| 07 | [Provider 扩展机制](./07-providers/SKILL.md) | 新增签名/核验/通知/存储渠道 |
-| 08 | [审计日志与安全基线](./08-audit-security/SKILL.md) | 写审计、返回错误、安全敏感改动 |
-| 09 | [API 路由约定](./09-api-conventions/SKILL.md) | 新增 Route Handler、Next 15 async params、文件路由 |
+| 01 | [Schema and Zod conventions](./01-schema-zod/SKILL.md) | Change Prisma models/enums, read/write Json columns, validate external input |
+| 02 | [Dual state machines](./02-state-machines/SKILL.md) | Any approval / signing / signer status change, sequential-sign round |
+| 03 | [PDF processing pipeline](./03-pdf-pipeline/SKILL.md) | Template fields, fill, coordinates, stamps, watermarks, signatures, fonts |
+| 04 | [Auth, RBAC, and external tokens](./04-auth-rbac/SKILL.md) | Login, role checks, login-free links, file access control |
+| 05 | [Internationalization (i18n)](./05-i18n/SKILL.md) | UI copy, dates/numbers/currency, message files |
+| 06 | [shadcn forms and UI patterns](./06-shadcn-forms/SKILL.md) | New/updated forms, page layout, loading/error/empty states |
+| 07 | [Provider extension](./07-providers/SKILL.md) | New signature / verification / notify / storage channel |
+| 08 | [Audit log and security baseline](./08-audit-security/SKILL.md) | Write audits, return errors, security-sensitive changes |
+| 09 | [API route conventions](./09-api-conventions/SKILL.md) | New Route Handlers, Next 15 async params, file routes |
 
-## 使用方式
+## How to use
 
-1. 接到任务后先按"触发场景"选择一个或多个技能
-2. 改动前阅读技能引用的源码文件，确认现状
-3. 按"标准步骤"执行，完成后对照"完成检查"
-4. 与技能规则冲突的特殊写法，必须在代码注释与交付说明中写明理由
+1. After receiving a task, pick one or more skills by trigger scenario
+2. Before changing code, read the source files the skill cites and confirm current behavior
+3. Follow the standard steps; after finishing, check the completion checklist
+4. If a special case conflicts with a skill rule, document the reason in a code comment and in the delivery notes
 
-## 全局不变量（所有技能共享）
+## Global invariants (shared by all skills)
 
-TS strict 无 `any`（边界用 `unknown` + 类型守卫）｜中文注释、英文标识符｜kebab-case 文件名｜最小变更｜不新增依赖/不改 env 与 compose（先获批）｜PDF 只在后端改｜文件不覆盖｜文案不硬编码｜错误回错误码不回本地化文本。
+TypeScript strict with no `any` (boundaries use `unknown` + type guards) | comments must be English, identifiers English | kebab-case file names | minimal change | no new dependencies / no env or compose edits without approval (**exception**: TipTap packages for DOCUMENT-mode template editing — see skill 03) | PDF mutated only on the backend | files never overwritten | copy never hardcoded | errors return error codes, not localized text | prefer installed shadcn components over custom markup.

@@ -50,6 +50,78 @@ services:
       echo 'MinIO bucket hrsign ready'
       "
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: hrsign-mailpit
+    restart: unless-stopped
+    profiles: ["full"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  app:
+    build: .
+    container_name: hrsign-app
+    restart: unless-stopped
+    profiles: ["full"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://hrsign:hrsign_dev_123@postgres:5432/hrsign?schema=public
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET: hrsign
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: change-me-docker-compose-dev-secret
+      AUTH_TRUST_HOST: "true"
+      APP_URL: http://localhost:3000
+      WATERMARK_TEXT: HRSign INTERNAL
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_FROM: "HRSign <hrsign@example.com>"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      target: worker
+    container_name: hrsign-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hrsign:hrsign_dev_123@postgres:5432/hrsign?schema=public
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET: hrsign
+      NEXTAUTH_SECRET: change-me-docker-compose-dev-secret
+      APP_URL: http://localhost:3000
+      WATERMARK_TEXT: HRSign INTERNAL
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_FROM: "HRSign <hrsign@example.com>"
+
 volumes:
   hrsign_pgdata:
   hrsign_miniodata:

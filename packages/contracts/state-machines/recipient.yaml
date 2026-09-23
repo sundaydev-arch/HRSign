@@ -1,0 +1,42 @@
+# Recipient status machine (language-agnostic)
+
+entity: Recipient
+initial: created
+
+states:
+  - created
+  - sent
+  - delivered
+  - signed
+  - declined
+  - completed
+  - faxpending
+  - autoresponded
+
+recipient_types:
+  - signer
+  - cc
+  - agent
+  - editor
+  - certifiedDelivery
+  - inPersonSigner
+  - notary
+  - witness
+  - carbonCopy
+  - intermediary
+
+transitions:
+  - { from: created, to: sent, action: envelope_sent }
+  - { from: sent, to: delivered, action: viewed }
+  - { from: sent, to: signed, action: sign }
+  - { from: delivered, to: signed, action: sign }
+  - { from: sent, to: declined, action: decline }
+  - { from: delivered, to: declined, action: decline }
+  - { from: signed, to: completed, action: finish }
+  - { from: created, to: completed, action: cc_auto_complete }
+
+# CC / certifiedDelivery skip sign tabs
+auto_complete_types:
+  - cc
+  - carbonCopy
+  - certifiedDelivery

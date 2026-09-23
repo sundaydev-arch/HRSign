@@ -1,6 +1,6 @@
 # HRSign — HR e-Sign Workflow
 
-[English](#english) ｜ [中文](#中文)
+[English](./README.md) ｜ [中文](./README.zh-CN.md)
 
 **HRSign** is an open-source, self-hosted, **single-tenant** electronic signing and company-seal workflow system purpose-built for **internal HR documents**: offer letters, employment contracts, onboarding/offboarding certificates, employment certificates, and income certificates.
 
@@ -8,10 +8,29 @@ It provides visual PDF template authoring, approval workflows, image-based compa
 
 > ⚠️ **Legal disclaimer:** Phase 1 delivers *visual seals + handwritten signature images* for internal process traceability only. It is **not** a "reliable electronic signature" under PRC e-signature law and carries no legal-validity guarantee. Phase 2 will plug in compliant providers (CA / PAdES / SM2) behind the existing `SignatureProvider` interface. Legal conclusions are the responsibility of the operator, the CA, and legal counsel.
 
----
+## Multi-backend (open source)
 
-<a id="english"></a>
-# English
+**Order (locked):** Next.js first → Python port → Go port.  
+Py/Go are **standalone** (they never call Next). Shared contract only: [`packages/contracts`](./packages/contracts).
+
+| Backend | Path | Role |
+|---------|------|------|
+| **Next.js** | [`apps/web`](./apps/web) | UI + durable `/api/v1` (Prisma) — primary |
+| **Python** | [`apps/api-py`](./apps/api-py) | FastAPI port of the same OpenAPI (in-memory) |
+| **Go** | [`apps/api-go`](./apps/api-go) | Go port of the same OpenAPI (in-memory) |
+
+Status grid: [`packages/contracts/FEATURE_MATRIX.md`](./packages/contracts/FEATURE_MATRIX.md).  
+Architecture: [`docs/architecture/multi-backend.md`](./docs/architecture/multi-backend.md).
+
+```bash
+# Optional: point the UI at a sibling backend
+# NEXT_PUBLIC_API_BASE=http://localhost:8000/v1   # Python
+# NEXT_PUBLIC_API_BASE=http://localhost:8080/v1   # Go
+pnpm contract:test
+PY_URL=http://127.0.0.1:8000/v1 GO_URL=http://127.0.0.1:8080/v1 pnpm contract:test
+```
+
+---
 
 ## What is HRSign?
 
@@ -48,18 +67,21 @@ HRSign turns a blank PDF into a controlled, auditable signing workflow:
 - Two independent state machines — approval (`DRAFT/PENDING/APPROVED/REJECTED/WITHDRAWN`) and signing (`NOT_STARTED/IN_PROGRESS/COMPLETED/DECLINED/EXPIRED/REVOKED`) — with a single transition table and 90+ unit tests
 - Backend-only PDF pipeline (pdf-lib): field filling with embedded **Noto Sans SC** subset, image seal stamping, global watermark; every stage is a new immutable file version with SHA-256
 - Handwritten signature pad; company seal management (demo seals only — never ship a real company seal)
-- External passwordless signing via one-time **hashed** tokens (revocable, expiring, single-use for signing) plus an email verification-code provider with cooldown and attempt limits
+- External passwordless signing via one-time **hashed** tokens (revocable, expiring, single-use for signing) plus email verification codes before sign
 - RBAC: super admin / HR / department leader / employee; backend-enforced data scoping
-- Append-only audit log with `SHA-256` hash chaining
-- S3-compatible storage abstraction (MinIO by default; presigned URLs supported)
+- Append-only audit log with `SHA-256` hash chaining (`pnpm audit:verify`)
+- S3-compatible storage abstraction (MinIO by default; replaceable via `StorageProvider`)
 - Email (SMTP) notifications with i18n templates; pluggable Notifier interface
 - Bilingual UI infrastructure: `zh-CN` / `en` via next-intl (Accept-Language + switcher + cookie; ICU MessageFormat)
+- Docker one-shot (`Dockerfile` + compose `app`/`worker`/`mailpit` profiles), `/api/health`, zod env validation, Prisma migration baseline
+- API Keys + HMAC webhooks + OpenAPI (`docs/openapi.yaml`) + batch task create; admin UI for keys/webhooks/settings
+- pg-boss worker for notify retries, expiry scan, retention scan; legal hold toggles in archive
+- Optional OIDC SSO; CSP/security headers; in-process rate limits; PDF upload heuristics; GitHub Actions CI
 
 **Roadmap** (see [docs/requirements/product-spec.md](./docs/requirements/product-spec.md) for authoritative status)
 
-- pg-boss async jobs (PDF render, notify, expiry/retention scans), API Keys + HMAC webhooks + OpenAPI, batch (CSV/JSON) initiation
-- Retention policies & legal holds; system settings page; OIDC SSO; compliant PAdES / SM2 signatures (Phase 2 interfaces already stubbed)
-- Security hardening: CSP/security headers, rate limiting, malicious-PDF structure checks; CI pipeline; Prisma migration baseline
+- Compliant PAdES / SM2 signatures (Phase 2 interfaces already stubbed)
+- Multi-tenant SaaS / Helm charts
 
 ## Tech stack & requirements
 
@@ -119,15 +141,33 @@ pnpm install          # also copies the pdf.js worker into public/
 ### 2. Start infrastructure
 
 ```bash
+# Postgres + MinIO only (typical local app via pnpm dev)
 docker compose up -d
+
+# Full stack: app + worker + Mailpit UI (http://localhost:8025)
+docker compose --profile full up -d --build
 ```
 
-Starts PostgreSQL 16 on host port **5433** and MinIO on **9000** (console **9001**, `minioadmin / minioadmin123`), and creates the `hrsign` bucket automatically.
+Starts PostgreSQL 16 on host port **5433** and MinIO on **9000** (console **9001**, `minioadmin / minioadmin123`), and creates the `hrsign` bucket automatically. With `--profile full`, the app listens on **3000** and the worker runs pg-boss jobs.
+
+**Backup / restore (volumes)**
+
+```bash
+# Postgres dump
+docker exec hrsign-postgres pg_dump -U hrsign hrsign > backup.sql
+# Restore
+cat backup.sql | docker exec -i hrsign-postgres psql -U hrsign hrsign
+
+# MinIO data lives in Docker volume hrsign_miniodata — back up with
+# `docker run --rm -v hrsign_miniodata:/data -v "$PWD":/backup alpine tar czf /backup/minio.tgz /data`
+```
 
 ### 3. Configure environment
 
 ```bash
 cp .env.example .env
+# Next.js only loads env from apps/web — link once:
+ln -sf ../../.env apps/web/.env
 ```
 
 For local development the defaults work as-is. Before any non-local deployment, at minimum change `NEXTAUTH_SECRET` (generate with `openssl rand -base64 32`), database credentials, and MinIO keys. SMTP is optional — notifications are marked SKIPPED when unset.
@@ -136,13 +176,19 @@ For local development the defaults work as-is. Before any non-local deployment, 
 
 ```bash
 pnpm db:generate       # generate Prisma client
-pnpm db:migrate        # create/upgrade schema
+pnpm db:migrate        # create/upgrade schema (dev)
+# production upgrades:
+# pnpm db:migrate:deploy
+
 pnpm db:seed           # demo accounts + demo data
 
 pnpm dev               # http://localhost:3000
+pnpm worker            # optional: pg-boss worker in another terminal
 # production:
 pnpm build && pnpm start
 ```
+
+Integration docs: [docs/openapi.yaml](./docs/openapi.yaml). Verify audit chain: `pnpm audit:verify`.
 
 ### Demo accounts
 
@@ -154,6 +200,8 @@ pnpm build && pnpm start
 | Employee | `employee@hrsign.local` | `Employee@123456` |
 
 > Demo seals are clearly marked `DEMO SEAL`. Never place a real company seal in the repository.
+
+Demo script, five Chinese starter templates, and a full feature matrix: **[docs/DEMO.md](./docs/DEMO.md)**. Seed publishes contract / offer / onboarding / resignation / employment certificates and a pending task **【演示】张三 · 录用通知签署**.
 
 ## Usage walkthrough
 
@@ -178,6 +226,7 @@ pnpm build
 
 node scripts/e2e-smoke.mjs            # 31-assertion HTTP smoke test (server must be running)
 node scripts/check-i18n-keys.mjs      # en/zh-CN message key parity
+pnpm contract:test                    # OpenAPI / matrix artifacts (+ optional live backends)
 ```
 
 ## Configuration reference
@@ -191,30 +240,25 @@ node scripts/check-i18n-keys.mjs      # en/zh-CN message key parity
 | `AUTH_TRUST_HOST` | Trust forwarded host (proxy) | `true` |
 | `APP_URL` | Base URL used in notification links | `http://localhost:3000` |
 | `WATERMARK_TEXT` | Global watermark text on signed versions | `HRSign INTERNAL` |
+| `NEXT_PUBLIC_API_BASE` | Optional Envelope API override (Py/Go) | empty = Next `/api/v1` |
 | `SMTP_HOST/PORT/SECURE/USER/PASS/FROM` | Email sending; empty = SKIPPED | — |
+| `OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET` | Optional OIDC SSO | leave blank to disable |
+| `DATABASE_URL_WORKER` | Optional separate URL for pg-boss | defaults to `DATABASE_URL` |
 
 ## Project layout
 
 ```
-prisma/                 # schema (20+ models), seed
-scripts/                # i18n key parity, pdf worker copy, e2e smoke
-messages/               # next-intl message catalogs (zh-CN.json, en.json)
-docs/                   # Requirements, code map, agent skills (knowledge base)
-src/
-  app/
-    (auth)/login        # Login page
-    (dashboard)/        # templates, tasks, archive, seals, audit-logs, admin/users
-    api/                # Route handlers (the only trust boundary)
-    sign/external/      # Public passwordless signing page
-  components/           # ui/ (shadcn), pdf/, tasks/, sign/, layout/
-  lib/                  # signing core, rbac, audit, notify, pdf engine, minio
-  schemas/              # zod schemas paired with every Prisma Json column
-  server/providers/     # Signature / Identity / Notifier / Storage interfaces + impls
-  server/state-machines/# approval, signing, signer transition tables (+tests)
-  auth.ts, auth.config.ts, middleware.ts
+apps/web/               # Next.js UI + /api + /api/v1 Envelope API
+apps/api-py/            # Python FastAPI Envelope API (standalone)
+apps/api-go/            # Go Envelope API (standalone)
+packages/contracts/     # OpenAPI, SQL, FEATURE_MATRIX, state machines
+packages/sdk-ts/        # Thin TypeScript /v1 client
+prisma/                 # schema + migrations + seed (used by apps/web)
+scripts/                # contract:test, i18n, e2e, pdf worker
+docs/                   # Requirements, architecture, agent skills
 ```
 
-See [docs/architecture/code-map.md](./docs/architecture/code-map.md) for the full map and [docs/requirements/product-spec.md](./docs/requirements/product-spec.md) for the complete specification.
+See [docs/architecture/code-map.md](./docs/architecture/code-map.md) and [docs/architecture/multi-backend.md](./docs/architecture/multi-backend.md). Product spec: [docs/requirements/product-spec.md](./docs/requirements/product-spec.md).
 
 ## Documentation for contributors
 
@@ -227,100 +271,3 @@ See [docs/architecture/code-map.md](./docs/architecture/code-map.md) for the ful
 ## License
 
 [Apache License 2.0](./LICENSE). Bundled **Noto Sans SC** is under the SIL Open Font License (OFL); see the font directory. **MinIO server is AGPL-3.0** — HRSign only calls it over the S3 protocol and you may substitute another S3-compatible store.
-
----
-
-<a id="中文"></a>
-# 中文
-
-## 项目简介
-
-HRSign 是一个开源、自托管、**单租户**的企业人事电子签署与盖章系统，面向 Offer、劳动合同、入职/离职证明、在职/收入证明等**内部人事文档**，提供 PDF 可视化模板、审批流、图片盖章、手写签名、外部免登录签署、哈希链审计与角色权限控制。
-
-> ⚠️ **免责声明：** 阶段 1 为"可视化盖章 + 手写签名图片"，仅用于内部流程留痕，**不是**《电子签名法》意义上的可靠电子签名，不承诺法律效力。阶段 2 将通过 `SignatureProvider` 接口接入 CA / PAdES / 国密 SM2 等合规签名；合规结论由使用者、CA 与法务负责。
-
-## 适用对象与场景
-
-- **对象：** 希望把员工文档与签署数据保留在**自有基础设施**内、不按份付费的企业 HR / 运营 / IT 团队。
-- **场景：** 内网人事文档流转、企业印章用印审批、候选人/员工邮件链接远程签署。
-- **暂不适用：** 需 CA 证书的合规可靠电子签名（阶段 2）、多租户 SaaS、面向客户的大规模电子合同。
-
-## 与同类方案的区别
-
-| | HRSign | 商业电子签 SaaS（法大大/e签宝/DocuSign） | 通用 PDF 工具 |
-|---|---|---|---|
-| 部署 | **自托管单租户，数据不出内网** | 厂商云 | 本地文件 |
-| 成本 | 开源 Apache-2.0，无按份费用 | 按账号/份计费 | 授权/免费 |
-| 焦点 | **人事流程 + 先审批后用印** | 通用签约 | 手工编辑 |
-| 扩展 | 存储/核验/签名/通知四类 Provider 接口 | 厂商定义 | 无 |
-| 审计 | 哈希链只追加日志 + 多版本留存 | 厂商存证 | 无 |
-
-## 功能状态（阶段 1 / MVP）
-
-**已实现**
-
-- 模板管理 + PDF 可视化字段编辑器（pdf.js 拖拽/缩放/翻页），版本不可变：草稿 → 已发布 → 已归档
-- 动态表单发起签署任务；顺序签 / 并行签；过期时间可配
-- 审批与签署两个独立状态机，转换集中于转换表，配套 90+ 单测；企业盖章必须审批通过，后端强校验
-- PDF 处理只在后端（pdf-lib）：字段填充（嵌入 Noto Sans SC 子集）、图片盖章、全局水印；每次产物为不可覆盖的新版本并记录 SHA-256
-- 手写签名板；印章后台管理（仅 DEMO SEAL，禁止入库真实公章）
-- 外部免登录签署：一次性**哈希**令牌（可撤销、有过期、签署后失效）+ 邮箱验证码（冷却/次数限制）
-- RBAC 四角色（超管/HR/部门负责人/员工），数据范围后端过滤
-- 只追加的 SHA-256 哈希链审计日志
-- S3 兼容存储抽象（默认 MinIO，支持预签名）
-- SMTP 邮件通知（i18n 模板），通知渠道可插拔
-- zh-CN / en 双语基础设施（next-intl：Accept-Language + 切换 + cookie，ICU MessageFormat）
-
-**路线图**（权威状态见 [docs/requirements/product-spec.md](./docs/requirements/product-spec.md)）
-
-- pg-boss 异步任务、API Key + HMAC Webhook + OpenAPI、CSV/JSON 批量发起
-- 保留策略与法务冻结、系统设置页、OIDC 单点登录、PAdES / 国密 SM2（阶段 2，接口已留空实现）
-- 安全加固：CSP/安全头、限流、恶意 PDF 结构校验；CI 流水线；Prisma 迁移基线
-
-## 技术栈与环境要求
-
-Node.js **20 LTS+**（最低 18.18）、**pnpm 9**、Docker（PostgreSQL + MinIO）、git。
-Next.js 15.1（App Router）+ React 19、TS strict（noUncheckedIndexedAccess、禁 any）、Tailwind + shadcn/ui 唯一 UI 库、PostgreSQL 16 + Prisma 6、MinIO、pdf-lib（后端）/ pdfjs-dist（前端）、Auth.js、zod、next-intl、Vitest。
-
-## 快速开始
-
-**macOS：** `brew install node@20 pnpm`（Docker 用 Docker Desktop）
-**Windows：** `winget install OpenJS.NodeJS.LTS` 后 `npm i -g pnpm@9`，安装 Docker Desktop
-**Linux：** 通过 NodeSource 装 Node 20，`npm i -g pnpm@9`，另装 Docker Engine
-
-```bash
-git clone https://github.com/<your-org>/hrsign.git
-cd hrsign
-pnpm install            # 会自动复制 pdf.js worker 到 public/
-docker compose up -d    # PostgreSQL:5433, MinIO:9000/9001
-cp .env.example .env    # 本地默认配置可直接用；生产必须改密钥
-pnpm db:generate
-pnpm db:migrate
-pnpm db:seed
-pnpm dev                # http://localhost:3000
-```
-
-**演示账号**：`admin@hrsign.local / Admin@123456`、`hr@hrsign.local / Hr@123456`、`leader@hrsign.local / Leader@123456`、`employee@hrsign.local / Employee@123456`
-
-## 使用流程
-
-1. **模板**：模板管理 → 上传空白 PDF → 拖拽字段 → 保存（仅草稿可改）→ 发布
-2. **发起**：签署任务 → 新建 → 选已发布模板 → 填动态字段 → 添加审批人/盖章人/签署人（外部仅需姓名+邮箱）→ 设过期时间
-3. **审批→盖章→签署**：按顺序审批；全部通过后盖章才被后端接受；外部签署人收到 `/sign/external/<token>` 链接
-4. **归档**：版本历史可预览/下载；全程哈希链审计
-
-**质量门禁与脚本**
-
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
-node scripts/e2e-smoke.mjs            # 31 项断言全链路冒烟（需服务已启动）
-node scripts/check-i18n-keys.mjs      # 中英文消息 key 一致性
-```
-
-环境变量、目录结构与文档链接同英文版（见上方 Configuration reference / Project layout）。
-
-## 贡献与许可
-
-[贡献指南](./CONTRIBUTING.md) ｜ [行为准则](./CODE_OF_CONDUCT.md) ｜ [安全策略](./SECURITY.md) ｜ [变更日志](./CHANGELOG.md) ｜ [知识库 docs/](./docs/README.md)
-
-许可：[Apache-2.0](./LICENSE)。内嵌 Noto Sans SC 为 OFL 许可；MinIO 服务端为 AGPL-3.0，本项目仅通过 S3 协议调用，可替换为其他 S3 兼容存储。

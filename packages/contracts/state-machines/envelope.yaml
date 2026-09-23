@@ -1,0 +1,40 @@
+# Envelope status machine (language-agnostic)
+# Consumers: Next (TS), FastAPI (Python), Go
+
+entity: Envelope
+initial: created
+
+states:
+  - created
+  - sent
+  - delivered
+  - signed
+  - completed
+  - declined
+  - voided
+  - expired
+  - corrected
+
+transitions:
+  - { from: created, to: sent, action: send }
+  - { from: created, to: voided, action: void }
+  - { from: sent, to: delivered, action: recipient_viewed }
+  - { from: sent, to: signed, action: recipient_signed }
+  - { from: delivered, to: signed, action: recipient_signed }
+  - { from: sent, to: declined, action: recipient_declined }
+  - { from: delivered, to: declined, action: recipient_declined }
+  - { from: signed, to: completed, action: all_signed }
+  - { from: sent, to: completed, action: all_signed }
+  - { from: delivered, to: completed, action: all_signed }
+  - { from: sent, to: voided, action: void }
+  - { from: delivered, to: voided, action: void }
+  - { from: sent, to: expired, action: expire }
+  - { from: delivered, to: expired, action: expire }
+  - { from: sent, to: corrected, action: correct }
+  - { from: delivered, to: corrected, action: correct }
+  - { from: corrected, to: sent, action: resend }
+
+illegal_examples:
+  - { from: completed, to: sent }
+  - { from: voided, to: completed }
+  - { from: expired, to: signed }

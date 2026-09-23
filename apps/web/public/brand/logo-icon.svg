@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <!-- Ink-black mark (matches BrandLogo / UI) -->
+  <rect width="256" height="256" rx="60" fill="#1C1917"/>
+  <path d="M86 50 L166 50 L196 80 L196 206 L86 206 Z" fill="#FAF7F2"/>
+  <path d="M166 50 L166 80 L196 80 Z" fill="#E8E0D4"/>
+  <path d="M104 168 C110 146 126 140 138 154 C150 168 162 140 176 118"
+        stroke="#9A5346" stroke-width="13" stroke-linecap="round" fill="none"/>
+  <circle cx="150" cy="188" r="15" fill="none" stroke="#9A5346" stroke-width="5"/>
+  <path d="M143 188 L148 193 L158 183" stroke="#9A5346" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

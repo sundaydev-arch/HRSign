@@ -14,10 +14,16 @@
  */
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
 const DB = "docker compose exec -T postgres psql -U hrsign -d hrsign -t -A -c";
+const DEMO_SEAL_PNG = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../public/brand/demo-seal.png"),
+);
 
 let passed = 0;
 let failed = 0;
@@ -32,7 +38,7 @@ function assert(cond, label, extra = "") {
   }
 }
 
-/** 1x1 transparent PNG (used for seal / signature images). */
+/** 1x1 transparent PNG (used for handwritten signature stubs only). */
 const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
   "base64",
@@ -110,10 +116,8 @@ async function main() {
   }
   const pdfBytes = Buffer.from(await pdf.save());
 
-  // Fixture data (names, labels, comments) intentionally stays Chinese: it
-  // exercises the zh-CN labels and the CJK font path of the PDF fill engine.
   const form = new FormData();
-  form.set("name", "E2E冒烟测试Offer模板");
+  form.set("name", "E2E smoke Offer template");
   form.set("category", "OFFER");
   form.set("file", new Blob([pdfBytes], { type: "application/pdf" }), "template.pdf");
   const tplRes = await req(hr, "POST", "/api/templates", form);
@@ -123,11 +127,11 @@ async function main() {
 
   const fieldsRes = await req(hr, "PUT", `/api/templates/${templateId}/fields`, {
     fields: [
-      { type: "TEXT", label: "姓名", page: 1, x: 72, y: 600, width: 160, height: 24, required: true, fontSize: 14 },
-      { type: "DATE", label: "入职日期", page: 1, x: 72, y: 560, width: 140, height: 24, required: true, fontSize: 14 },
-      { type: "TEXT", label: "岗位职责", page: 1, x: 72, y: 420, width: 300, height: 24, required: false, fontSize: 12 },
-      { type: "SEAL", label: "公司公章", page: 2, x: 380, y: 640, width: 120, height: 120, required: false },
-      { type: "SIGNATURE", label: "候选人签名", page: 2, x: 120, y: 640, width: 160, height: 60, required: false },
+      { type: "TEXT", label: "Full name", page: 1, x: 72, y: 600, width: 160, height: 24, required: true, fontSize: 14 },
+      { type: "DATE", label: "Start date", page: 1, x: 72, y: 560, width: 140, height: 24, required: true, fontSize: 14 },
+      { type: "TEXT", label: "Job duties", page: 1, x: 72, y: 420, width: 300, height: 24, required: false, fontSize: 12 },
+      { type: "SEAL", label: "Company seal", page: 2, x: 380, y: 640, width: 120, height: 120, required: false },
+      { type: "SIGNATURE", label: "Candidate signature", page: 2, x: 120, y: 640, width: 160, height: 60, required: false },
     ],
   });
   assert(fieldsRes.status === 200 && fieldsRes.data?.count === 5, "save 5 template fields", JSON.stringify(fieldsRes.data));
@@ -142,14 +146,14 @@ async function main() {
   // ===== 3. Seal upload =====
   console.log("\n3. Seal management");
   const sealForm = new FormData();
-  sealForm.set("name", "E2E测试公章");
-  sealForm.set("file", new Blob([TINY_PNG], { type: "image/png" }), "seal.png");
+  sealForm.set("name", "E2E test seal");
+  sealForm.set("file", new Blob([DEMO_SEAL_PNG], { type: "image/png" }), "seal.png");
   const sealRes = await req(admin, "POST", "/api/seals", sealForm);
   assert(sealRes.status === 201 || sealRes.status === 200, "admin can upload a transparent PNG seal", JSON.stringify(sealRes.data));
   const sealId = sealRes.data?.seal?.id;
 
   const badSealForm = new FormData();
-  badSealForm.set("name", "坏图章");
+  badSealForm.set("name", "Bad seal");
   badSealForm.set("file", new Blob([Buffer.from("not a png")], { type: "image/png" }), "bad.png");
   const badRes = await req(admin, "POST", "/api/seals", badSealForm);
   assert(badRes.status === 400, "non-PNG files are rejected (magic-number check)");
@@ -165,18 +169,18 @@ async function main() {
   const fieldByName = Object.fromEntries(fields.map((f) => [f.label, f.id]));
   const taskRes = await req(hr, "POST", "/api/tasks", {
     templateId,
-    title: "张三的 Offer（E2E 冒烟）",
+    title: "Jane Doe offer (E2E smoke)",
     flowType: "SEQUENTIAL",
     expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
     formValues: {
-      [fieldByName["姓名"]]: "张三",
-      [fieldByName["入职日期"]]: "2026-10-01",
-      [fieldByName["岗位职责"]]: "负责后端服务开发与维护",
+      [fieldByName["Full name"]]: "Jane Doe",
+      [fieldByName["Start date"]]: "2026-10-01",
+      [fieldByName["Job duties"]]: "Backend service development and maintenance",
     },
     signers: [
       { signRole: "APPROVER", userId: leaderUser.id },
       { signRole: "COMPANY_SEAL", userId: hrUser.id },
-      { signRole: "PERSONAL_SIGNATURE", externalFullName: "张三", externalEmail: "candidate@example.com" },
+      { signRole: "PERSONAL_SIGNATURE", externalFullName: "Jane Doe", externalEmail: "candidate@example.com" },
     ],
   });
   assert(taskRes.status === 201 || taskRes.status === 200, "sequential signing task is created", JSON.stringify(taskRes.data));
@@ -186,14 +190,14 @@ async function main() {
 
   const missingRes = await req(hr, "POST", "/api/tasks", {
     templateId,
-    title: "缺必填项的任务",
+    title: "Task missing required fields",
     flowType: "SEQUENTIAL",
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
     formValues: {},
     signers: [
       { signRole: "APPROVER", userId: leaderUser.id },
       { signRole: "COMPANY_SEAL", userId: hrUser.id },
-      { signRole: "PERSONAL_SIGNATURE", externalFullName: "李四", externalEmail: "candidate2@example.com" },
+      { signRole: "PERSONAL_SIGNATURE", externalFullName: "Li Si", externalEmail: "candidate2@example.com" },
     ],
   });
   assert(missingRes.status === 400, "task creation with missing required fields is rejected");
@@ -213,7 +217,7 @@ async function main() {
   });
   assert(sealBefore.status === 400, "sealing before approval is rejected (approval-before-seal)");
 
-  const approveRes = await req(leader, "POST", `/api/tasks/${taskId}/approve`, { comment: "同意，尽快发出" });
+  const approveRes = await req(leader, "POST", `/api/tasks/${taskId}/approve`, { comment: "Approved, send promptly" });
   assert(approveRes.status === 201 || approveRes.status === 200, "leader approves the task", JSON.stringify(approveRes.data));
   const afterApprove = await req(leader, "GET", `/api/tasks/${taskId}`);
   assert(
@@ -251,10 +255,28 @@ async function main() {
   const extFile = await fetch(`${BASE}${extData.fileUrl}`);
   assert(extFile.ok && (extFile.headers.get("content-type") ?? "").includes("pdf"), "external signer can preview the PDF via token");
 
+  // Email verification gate: start verification, then mark VERIFIED in DB (smoke only).
+  const verifyStart = await fetch(`${BASE}/api/sign/external/${tokenOut}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale: "en" }),
+  });
+  const verifyStartData = await verifyStart.json();
+  const verificationId = verifyStartData?.verificationId;
+  assert(verifyStart.ok && !!verificationId, "external email verification can start", JSON.stringify(verifyStartData));
+  execSync(
+    `${DB} "UPDATE identity_verifications SET status='VERIFIED', \\"verifiedAt\\"=NOW() WHERE id='${verificationId}';"`,
+    { encoding: "utf8" },
+  );
+
   const extSign = await fetch(`${BASE}/api/sign/external/${tokenOut}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "HANDWRITE", imageDataUrl: `data:image/png;base64,${TINY_PNG.toString("base64")}` }),
+    body: JSON.stringify({
+      mode: "HANDWRITE",
+      imageDataUrl: `data:image/png;base64,${TINY_PNG.toString("base64")}`,
+      verificationId,
+    }),
   });
   const extSignData = await extSign.json();
   assert(

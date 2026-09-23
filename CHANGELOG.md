@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- DocuSign-parity Envelope API on three backends (Next `/api/v1`, Python FastAPI, Go) behind `packages/contracts`
+- Hosted recipient sign, conditional tabs, Connect configurations, bulk send, embedded views
+- Dashboard UI for PowerForms / Clickwrap / Notary / Rooms / CLM / Bulk Send / Accounts
+- Shared layout helpers `CreatePanel` / `ListPanel` and `copyText` clipboard util
+- Architecture guide: `docs/architecture/multi-backend.md`; refreshed monorepo `code-map.md`
+
 ### Changed
+- README / README.zh-CN project layout updated for `apps/*` + `packages/*` monorepo
+- Root `.env` must be linked into `apps/web/.env` for Next env validation
+- FEATURE_MATRIX rows for Connect, hosted sign, and conditional tabs elevated to `partial` on Py/Go
+
+### Changed (earlier)
 - All API error responses are now locale-independent machine codes with interpolation parameters: `{ "error": { "code": "FIELD_TYPE_INVALID", "params": { "index": 2 } } }`; the catalog lives in `src/lib/api.ts` (`ErrorCode`) and the frontend throws `ApiClientError(code, params)` for localized rendering
 - Consolidated the parallel `lib/*` and `server/providers/*` abstraction layers: storage, signing, and email transports now resolve exclusively through `getStorage()` / `getSignatureProvider()` / `sendEmail` from `@/server/providers`; task-event email composition moved to `src/server/notifications/task-events.ts`
 - `SignatureProvider.sign()` now accepts multiple placements per action (single PDF render pass) plus an optional watermark, and returns the new version plus per-placement signature data; evidence images are keyed `signatures/{taskId}/{timestamp}.png`
@@ -19,15 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dead module augmentation `src/types/next-auth.d.ts` (ineffective under the pnpm strict layout)
 - Legacy `src/lib/minio.ts`, `src/lib/notify/*`, and `src/lib/pdf/signer/*` (folded into the provider layer)
 
-### Added (planned)
-- pg-boss async jobs: PDF render, notification, expiry/retention scans
-- API Keys, HMAC webhooks, OpenAPI generation, batch (CSV/JSON) initiation
-- Retention policies and legal holds; system settings page
-- OIDC single sign-on
-- Phase 2 compliant signatures (PAdES / GM SM2) behind the existing `SignatureProvider` interface
-
-### Security (planned)
-- Content-Security-Policy and standard security response headers
+### Security
+- Content-Security-Policy and standard security response headers (Next)
 - Rate limiting on login, verification-code, and external-signing endpoints
 - Uploaded PDF hardening: magic-number checks and rejection of JavaScript / embedded files / Launch actions
 - GitHub Actions CI gate (lint, typecheck, tests, i18n key parity, build)

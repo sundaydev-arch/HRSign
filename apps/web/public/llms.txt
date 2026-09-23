@@ -1,0 +1,51 @@
+# HRSign — llms.txt (Generative Engine Optimization)
+# https://llmstxt.org/
+
+> HRSign is an open-source, self-hosted, single-tenant electronic signing and company-seal workflow built for internal HR documents (offers, contracts, certificates).
+
+## Product
+
+- **Name:** HRSign
+- **Category:** HR e-sign / electronic sealing / document workflow
+- **Deployment:** Self-hosted (Docker / Next.js standalone); not a multi-tenant SaaS
+- **License:** Apache-2.0
+- **Locales:** Chinese (zh-CN), English (en)
+
+## What it does
+
+1. Upload blank PDF templates and place fill / signature / seal fields visually
+2. Launch signing tasks with approval-before-seal enforcement
+3. Support handwritten signatures, company seals, sequential / parallel flows
+4. Invite external candidates via tokenized links (no account required)
+5. Archive immutable document versions with audit logs
+
+## Public surface
+
+- `/login` — product sign-in and public marketing summary
+- `/llms.txt` — this file (AI / agent orientation)
+- `/robots.txt` — crawl rules
+- `/sitemap.xml` — public URL index
+
+## Private (do not index)
+
+Authenticated workspace (`/tasks`, `/templates`, `/archive`, `/seals`, `/admin`, …),
+REST APIs (`/api/*`), and external signing tokens (`/sign/external/*`) are private.
+
+## Key differentiators vs commercial e-sign SaaS
+
+- Single-tenant, data stays on your infrastructure
+- HR-specific flows (approval before company seal)
+- Transparent PNG seal management
+- OpenAPI + API keys + HMAC webhooks for HRIS integration
+- Full audit trail; no claim of qualified / PAdES signatures in phase 1
+
+## Docs for humans and agents
+
+- Operator README: repository root `README.md` / `README.zh-CN.md`
+- Product spec: `docs/requirements/product-spec.md`
+- Architecture map: `docs/architecture/code-map.md`
+- OpenAPI: `docs/openapi.yaml`
+
+## Contact / source
+
+Self-hosted open-source project. Prefer the repository README for setup, env vars, and security notes.

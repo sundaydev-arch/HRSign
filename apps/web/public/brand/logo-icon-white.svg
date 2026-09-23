@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <!-- White icon for dark backgrounds — paper + stroke in white -->
+  <path d="M86 50 L166 50 L196 80 L196 206 L86 206 Z" fill="#FFFFFF"/>
+  <path d="M166 50 L166 80 L196 80 Z" fill="rgba(255,255,255,0.55)"/>
+  <path d="M104 168 C110 146 126 140 138 154 C150 168 162 140 176 118"
+        stroke="#FFFFFF" stroke-width="13" stroke-linecap="round" fill="none"/>
+  <circle cx="150" cy="188" r="15" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+  <path d="M143 188 L148 193 L158 183" stroke="#FFFFFF" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

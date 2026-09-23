@@ -1,0 +1,1281 @@
+openapi: 3.0.3
+info:
+  title: HRSign Envelope API (DocuSign-parity)
+  version: 0.3.0
+  description: |
+    Open-source Envelope-first API. **Three backends implement this contract identically:**
+    Next.js (`/api/v1/...`), Python FastAPI (`apps/api-py`), Go (`apps/api-go`).
+    Authenticate with session cookie or `Authorization: Bearer hrs_…`.
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Next.js reference
+  - url: http://localhost:8000/v1
+    description: Python FastAPI
+  - url: http://localhost:8080/v1
+    description: Go
+security:
+  - ApiKeyAuth: []
+  - SessionCookie: []
+tags:
+  - name: Health
+  - name: Envelopes
+  - name: Recipients
+  - name: Documents
+  - name: Tabs
+  - name: PowerForms
+  - name: Bulk
+  - name: Embedded
+  - name: Brands
+  - name: Comments
+  - name: Identity
+  - name: Clickwrap
+  - name: Rooms
+  - name: CLM
+  - name: Notary
+  - name: Accounts
+  - name: Connect
+  - name: HostedSign
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /envelopes:
+    get:
+      tags: [Envelopes]
+      summary: List envelopes
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/EnvelopeStatus"
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        "200":
+          description: Envelope list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [envelopes]
+                properties:
+                  envelopes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [Envelopes]
+      summary: Create draft envelope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEnvelopeRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /envelopes/{envelopeId}:
+    get:
+      tags: [Envelopes]
+      summary: Get envelope
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Not found
+    delete:
+      tags: [Envelopes]
+      summary: Purge draft envelope
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "204":
+          description: Purged
+
+  /envelopes/{envelopeId}/send:
+    post:
+      tags: [Envelopes]
+      summary: Send envelope to recipients
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /envelopes/{envelopeId}/void:
+    post:
+      tags: [Envelopes]
+      summary: Void envelope
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Voided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /envelopes/{envelopeId}/documents:
+    get:
+      tags: [Documents]
+      summary: List documents on envelope
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnvelopeDocument"
+    post:
+      tags: [Documents]
+      summary: Attach document
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachDocumentRequest"
+      responses:
+        "201":
+          description: Attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDocument"
+
+  /envelopes/{envelopeId}/recipients:
+    get:
+      tags: [Recipients]
+      summary: List recipients
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Recipients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipients:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Recipient"
+    put:
+      tags: [Recipients]
+      summary: Replace recipient set
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipients]
+              properties:
+                recipients:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RecipientInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipients:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Recipient"
+
+  /envelopes/{envelopeId}/recipients/{recipientId}/sign:
+    post:
+      tags: [Recipients]
+      summary: Apply signature / complete recipient tabs
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+        - $ref: "#/components/parameters/RecipientId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tabValues:
+                  type: object
+                  additionalProperties: { type: string }
+                signatureImageBase64: { type: string }
+      responses:
+        "200":
+          description: Signed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /envelopes/{envelopeId}/tabs:
+    get:
+      tags: [Tabs]
+      summary: List envelope tabs
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Tabs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tabs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tab"
+    put:
+      tags: [Tabs]
+      summary: Replace envelope tabs
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tabs]
+              properties:
+                tabs:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/TabInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tabs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tab"
+
+  /envelopes/{envelopeId}/certificate:
+    get:
+      tags: [Envelopes]
+      summary: Certificate of Completion (JSON summary; PDF later)
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: CoC
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateOfCompletion"
+        "409":
+          description: Envelope not completed
+
+  /envelopes/{envelopeId}/comments:
+    get:
+      tags: [Comments]
+      summary: List comments
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnvelopeComment"
+    post:
+      tags: [Comments]
+      summary: Add comment
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+                documentId: { type: string }
+                page: { type: integer }
+      responses:
+        "201":
+          description: Created
+
+  /tabs/types:
+    get:
+      tags: [Tabs]
+      summary: Supported tab types
+      security: []
+      responses:
+        "200":
+          description: Tab catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  types:
+                    type: array
+                    items: { type: string }
+
+  /powerforms:
+    get:
+      tags: [PowerForms]
+      summary: List PowerForms
+      responses:
+        "200":
+          description: PowerForms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  powerForms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PowerForm"
+    post:
+      tags: [PowerForms]
+      summary: Create PowerForm
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PowerFormInput"
+      responses:
+        "201":
+          description: Created
+
+  /powerforms/{slug}/start:
+    post:
+      tags: [PowerForms]
+      summary: Public self-serve start — create & send envelope from PowerForm
+      security: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+      responses:
+        "201":
+          description: Envelope started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  envelopeId: { type: string }
+                  accessUrl: { type: string }
+                  powerFormId: { type: string }
+
+  /bulk_send_batches:
+    post:
+      tags: [Bulk]
+      summary: Create bulk send batch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSendRequest"
+      responses:
+        "201":
+          description: Batch accepted
+        "501":
+          description: Not implemented
+
+  /accounts/{accountId}/brands:
+    get:
+      tags: [Brands]
+      summary: List brands
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  brands:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Brand"
+
+  /envelopes/{envelopeId}/views/recipient:
+    post:
+      tags: [Embedded]
+      summary: Create embedded recipient view URL / JWT
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientId, returnUrl]
+              properties:
+                recipientId: { type: string }
+                returnUrl: { type: string, format: uri }
+                frameAncestors:
+                  type: array
+                  items: { type: string }
+      responses:
+        "201":
+          description: Embedded session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddedView"
+        "501":
+          description: Not implemented
+
+  /identity/methods:
+    get:
+      tags: [Identity]
+      summary: Available IDV methods / plugin status
+      responses:
+        "200":
+          description: Methods
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  methods:
+                    type: array
+                    items: { type: string }
+                  plugins:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        status: { type: string }
+                        channel: { type: string }
+
+  /sign/envelope/{envelopeId}/idv:
+    post:
+      tags: [Identity]
+      summary: Start or verify recipient IDV (token-gated public)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientId, token]
+              properties:
+                action: { type: string, enum: [start, verify] }
+                recipientId: { type: string }
+                token: { type: string }
+                method: { type: string }
+                verificationId: { type: string }
+                code: { type: string }
+      responses:
+        "200":
+          description: Verify result
+        "201":
+          description: Challenge started
+        "429":
+          description: Cooldown
+
+  /clickwraps:
+    get:
+      tags: [Clickwrap]
+      summary: List clickwraps
+      responses:
+        "200":
+          description: Clickwraps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clickwraps:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Clickwrap"
+    post:
+      tags: [Clickwrap]
+      summary: Create clickwrap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                displayName: { type: string }
+                bodyHtml: { type: string }
+                requireScroll: { type: boolean }
+      responses:
+        "201":
+          description: Created
+
+  /clickwraps/{clickwrapId}/accept:
+    post:
+      tags: [Clickwrap]
+      summary: Record public acceptance
+      security: []
+      parameters:
+        - in: path
+          name: clickwrapId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptorEmail]
+              properties:
+                acceptorEmail: { type: string, format: email }
+                acceptorName: { type: string }
+      responses:
+        "201":
+          description: Accepted
+
+  /rooms:
+    get:
+      tags: [Rooms]
+      summary: List rooms
+      responses:
+        "200":
+          description: Rooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rooms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Room"
+    post:
+      tags: [Rooms]
+      summary: Create room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                members:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      email: { type: string }
+                      role: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /clm/agreements:
+    get:
+      tags: [CLM]
+      summary: List CLM agreements
+      responses:
+        "200":
+          description: Agreements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agreements:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClmAgreement"
+    post:
+      tags: [CLM]
+      summary: Create CLM agreement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                counterparty: { type: string }
+                envelopeId: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /notary/transactions:
+    get:
+      tags: [Notary]
+      summary: List notary transactions
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotaryTransaction"
+    post:
+      tags: [Notary]
+      summary: Create notary transaction
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                envelopeId: { type: string }
+                notaryName: { type: string }
+                jurisdiction: { type: string }
+                scheduledAt: { type: string, format: date-time }
+      responses:
+        "201":
+          description: Created
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts (multi-tenant)
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+    post:
+      tags: [Accounts]
+      summary: Create account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /accounts/{accountId}/members:
+    get:
+      tags: [Accounts]
+      summary: List account members
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Members
+    post:
+      tags: [Accounts]
+      summary: Add member by email
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                role: { type: string }
+      responses:
+        "201":
+          description: Added
+
+  /envelopes/{envelopeId}/evidence:
+    get:
+      tags: [Envelopes]
+      summary: Evidence pack (JSON bundle with integrity hash)
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+        - in: query
+          name: download
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200":
+          description: Evidence pack
+        "409":
+          description: Envelope not completed
+
+  /trust/providers:
+    get:
+      tags: [Accounts]
+      summary: Signature / CA provider catalog
+      responses:
+        "200":
+          description: Providers
+
+  /sign/envelope/{envelopeId}:
+    get:
+      tags: [HostedSign]
+      summary: Public hosted recipient view (token-gated)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+        - in: query
+          name: r
+          required: true
+          schema: { type: string }
+          description: Recipient id
+        - in: query
+          name: t
+          schema: { type: string }
+          description: Access token from invite link
+        - in: query
+          name: embed
+          schema: { type: string }
+          description: Embedded HMAC token (alternate)
+      responses:
+        "200":
+          description: Hosted signing payload (envelope summary, recipient, visible tabs)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostedSignView"
+        "401":
+          description: Invalid or missing token
+    post:
+      tags: [HostedSign]
+      summary: Complete or decline via hosted link
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/EnvelopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientId, token]
+              properties:
+                recipientId: { type: string }
+                token: { type: string }
+                tabValues:
+                  type: object
+                  additionalProperties: { type: string }
+                signatureImageBase64: { type: string }
+                decline: { type: boolean }
+                declineReason: { type: string }
+      responses:
+        "200":
+          description: Updated envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "401":
+          description: Invalid token
+
+  /connect/configurations:
+    get:
+      tags: [Connect]
+      summary: List DocuSign Connect-style webhook configurations
+      responses:
+        "200":
+          description: Configurations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configurations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ConnectConfiguration"
+    post:
+      tags: [Connect]
+      summary: Create Connect configuration (secret returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url, events]
+              properties:
+                name: { type: string }
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { $ref: "#/components/schemas/ConnectEvent" }
+                enabled: { type: boolean, default: true }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectConfiguration"
+
+  /connect/configurations/{configurationId}:
+    get:
+      tags: [Connect]
+      summary: Get Connect configuration
+      parameters:
+        - in: path
+          name: configurationId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectConfiguration"
+        "404":
+          description: Not found
+    delete:
+      tags: [Connect]
+      summary: Delete Connect configuration
+      parameters:
+        - in: path
+          name: configurationId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: hrs_
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+  parameters:
+    EnvelopeId:
+      in: path
+      name: envelopeId
+      required: true
+      schema: { type: string }
+    RecipientId:
+      in: path
+      name: recipientId
+      required: true
+      schema: { type: string }
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema: { type: string }
+  schemas:
+    Health:
+      type: object
+      required: [status, backend]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        backend: { type: string, enum: [next, python, go] }
+        version: { type: string }
+    EnvelopeStatus:
+      type: string
+      enum: [created, sent, delivered, signed, completed, declined, voided, expired, corrected]
+    RecipientType:
+      type: string
+      enum: [signer, cc, agent, editor, certifiedDelivery, inPersonSigner, notary, witness, carbonCopy, intermediary]
+    RecipientStatus:
+      type: string
+      enum: [created, sent, delivered, signed, declined, completed, faxpending, autoresponded]
+    TabType:
+      type: string
+      enum:
+        - signHere
+        - initialHere
+        - dateSigned
+        - text
+        - fullName
+        - emailAddress
+        - checkbox
+        - radioGroup
+        - formula
+        - attachment
+        - payment
+        - company
+        - title
+        - note
+    Envelope:
+      type: object
+      required: [id, status, subject, documents, recipients]
+      properties:
+        id: { type: string }
+        accountId: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/EnvelopeStatus" }
+        subject: { type: string }
+        emailBlurb: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        voidedAt: { type: string, format: date-time, nullable: true }
+        voidReason: { type: string, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        legacyTaskId: { type: string, nullable: true }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/EnvelopeDocument" }
+        recipients:
+          type: array
+          items: { $ref: "#/components/schemas/Recipient" }
+        tabs:
+          type: array
+          items: { $ref: "#/components/schemas/Tab" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EnvelopeDocument:
+      type: object
+      required: [id, name, documentOrder]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        documentOrder: { type: integer }
+        storageKey: { type: string, nullable: true }
+        sha256: { type: string, nullable: true }
+        pageCount: { type: integer, default: 1 }
+        fileUrl: { type: string, nullable: true }
+    Recipient:
+      type: object
+      required: [id, recipientType, routingOrder, name, email, status]
+      properties:
+        id: { type: string }
+        recipientType: { $ref: "#/components/schemas/RecipientType" }
+        routingOrder: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        phoneE164: { type: string, nullable: true }
+        deliveryChannel: { type: string }
+        idvMethod: { type: string }
+        idvStatus: { type: string }
+        hostUserId: { type: string, nullable: true }
+        witnessForId: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/RecipientStatus" }
+        userId: { type: string, nullable: true }
+        signedAt: { type: string, format: date-time, nullable: true }
+        declinedAt: { type: string, format: date-time, nullable: true }
+        declineReason: { type: string, nullable: true }
+        accessUrl: { type: string, nullable: true }
+    RecipientInput:
+      type: object
+      required: [recipientType, routingOrder, name, email]
+      properties:
+        recipientType: { $ref: "#/components/schemas/RecipientType" }
+        routingOrder: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        userId: { type: string }
+        phoneE164: { type: string }
+        deliveryChannel: { type: string, enum: [email, sms, both] }
+        idvMethod: { type: string, enum: [none, email_otp, sms_otp, kba, id_document, face] }
+        hostUserId: { type: string }
+        witnessForId: { type: string }
+    Tab:
+      type: object
+      required: [id, tabType, required]
+      properties:
+        id: { type: string }
+        tabType: { type: string }
+        envelopeDocumentId: { type: string, nullable: true }
+        recipientId: { type: string, nullable: true }
+        coordinates: {}
+        required: { type: boolean }
+        value: { type: string, nullable: true }
+        conditional: {}
+    TabInput:
+      type: object
+      required: [tabType]
+      properties:
+        tabType: { type: string }
+        envelopeDocumentId: { type: string }
+        recipientId: { type: string }
+        coordinates: {}
+        required: { type: boolean, default: true }
+        value: { type: string }
+        conditional: {}
+    CreateEnvelopeRequest:
+      type: object
+      required: [subject]
+      properties:
+        subject: { type: string, minLength: 1 }
+        emailBlurb: { type: string }
+        expiresAt: { type: string, format: date-time }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/AttachDocumentRequest" }
+        recipients:
+          type: array
+          items: { $ref: "#/components/schemas/RecipientInput" }
+    AttachDocumentRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        documentOrder: { type: integer, default: 1 }
+        storageKey: { type: string }
+        pageCount: { type: integer, default: 1 }
+        # For demos: empty PDF placeholder when storageKey omitted
+        blank: { type: boolean, default: true }
+    CertificateOfCompletion:
+      type: object
+      required: [envelopeId, status, subject, completedAt, recipients]
+      properties:
+        envelopeId: { type: string }
+        status: { $ref: "#/components/schemas/EnvelopeStatus" }
+        subject: { type: string }
+        completedAt: { type: string, format: date-time }
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              email: { type: string }
+              recipientType: { $ref: "#/components/schemas/RecipientType" }
+              status: { $ref: "#/components/schemas/RecipientStatus" }
+              signedAt: { type: string, format: date-time, nullable: true }
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              sha256: { type: string, nullable: true }
+    EnvelopeComment:
+      type: object
+      properties:
+        id: { type: string }
+        body: { type: string }
+        authorName: { type: string }
+        documentId: { type: string, nullable: true }
+        page: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+    PowerForm:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        templateId: { type: string }
+        url: { type: string }
+    PowerFormInput:
+      type: object
+      required: [name, templateId]
+      properties:
+        name: { type: string }
+        templateId: { type: string }
+    BulkSendRequest:
+      type: object
+      required: [templateId, rows]
+      properties:
+        templateId: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
+    Brand:
+      type: object
+      properties:
+        brandId: { type: string }
+        brandName: { type: string }
+        primaryColor: { type: string }
+    EmbeddedView:
+      type: object
+      properties:
+        url: { type: string }
+        expiresAt: { type: string, format: date-time }
+    Clickwrap:
+      type: object
+      properties:
+        clickwrapId: { type: string }
+        name: { type: string }
+        displayName: { type: string }
+        status: { type: string }
+        version: { type: integer }
+        requireScroll: { type: boolean }
+        bodyHtml: { type: string }
+        acceptanceCount: { type: integer }
+    Room:
+      type: object
+      properties:
+        roomId: { type: string }
+        name: { type: string }
+        status: { type: string }
+        description: { type: string, nullable: true }
+        members: { type: array, items: { type: object } }
+        documents: { type: array, items: { type: object } }
+    ClmAgreement:
+      type: object
+      properties:
+        agreementId: { type: string }
+        name: { type: string }
+        status: { type: string }
+        counterparty: { type: string, nullable: true }
+        envelopeId: { type: string, nullable: true }
+    NotaryTransaction:
+      type: object
+      properties:
+        transactionId: { type: string }
+        status: { type: string }
+        notaryName: { type: string, nullable: true }
+        jurisdiction: { type: string, nullable: true }
+        envelopeId: { type: string, nullable: true }
+        scheduledAt: { type: string, format: date-time, nullable: true }
+    Account:
+      type: object
+      properties:
+        accountId: { type: string }
+        name: { type: string }
+        slug: { type: string }
+    ConnectEvent:
+      type: string
+      enum:
+        - envelope.sent
+        - envelope.completed
+        - envelope.voided
+        - envelope.declined
+        - recipient.completed
+        - task.created
+        - approval.result
+        - signing.completed
+        - signing.declined
+        - signing.expired
+    ConnectConfiguration:
+      type: object
+      properties:
+        configurationId: { type: string }
+        name: { type: string }
+        url: { type: string }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectEvent" }
+        enabled: { type: boolean }
+        secretPrefix: { type: string }
+        secret:
+          type: string
+          description: Plaintext HMAC secret; only present on create
+        createdAt: { type: string, format: date-time }
+    HostedSignView:
+      type: object
+      properties:
+        envelope:
+          type: object
+          properties:
+            id: { type: string }
+            subject: { type: string }
+            status: { $ref: "#/components/schemas/EnvelopeStatus" }
+            emailBlurb: { type: string, nullable: true }
+            documents:
+              type: array
+              items: { $ref: "#/components/schemas/EnvelopeDocument" }
+        recipient: { $ref: "#/components/schemas/Recipient" }
+        tabs:
+          type: array
+          items: { $ref: "#/components/schemas/Tab" }
+        idvRequired: { type: boolean }

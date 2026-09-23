@@ -1,0 +1,14 @@
+{
+  "name": "@hrsign/sdk-ts",
+  "version": "0.3.0",
+  "description": "TypeScript client for HRSign Envelope API (Next / Python / Go)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src"],
+  "sideEffects": false
+}

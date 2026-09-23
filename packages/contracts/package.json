@@ -1,0 +1,14 @@
+{
+  "name": "@hrsign/contracts",
+  "version": "0.3.0",
+  "description": "Shared OpenAPI, SQL schema, and state machines for HRSign backends",
+  "license": "Apache-2.0",
+  "private": true,
+  "files": [
+    "openapi",
+    "schema",
+    "state-machines",
+    "FEATURE_MATRIX.md",
+    "README.md"
+  ]
+}

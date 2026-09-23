@@ -1,20 +1,23 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
+.pnpm-store-local/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
+.next/
 /out/
 
-# production
-/build
+# build outputs
+build/
+dist/
+.turbo/
 
 # misc
 .DS_Store
@@ -28,9 +31,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # local env files (keep .env.example tracked)
-/.env
-/.env.*
-!/.env.example
+.env
+.env.*
+!.env.example
 
 # vercel
 .vercel
@@ -49,3 +52,22 @@ next-env.d.ts
 
 # local docs exports / temp
 *.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.python-version
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Go
+vendor/

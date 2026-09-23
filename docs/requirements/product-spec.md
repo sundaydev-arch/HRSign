@@ -1,173 +1,173 @@
-# 产品需求规格（HRSign v0.x）与实现状态对照
+# Product specification (HRSign v0.x) and implementation status
 
-> 开源、自托管、**单租户**企业内部人事电子签署与盖章系统。
-> 本文按规格 0–20 节整理**可执行规则**，并标注当前代码实现状态（✅ / 🟡 / ⬜ / 🔒）。
-> 状态核对时间：2026-09；依据：仓库实际代码与构建产物（31 条路由、98 个单测）。
+> Open-source, self-hosted, **single-tenant** internal HR e-sign and sealing system.
+> This document collects **executable rules** from spec sections 0–20 and marks current implementation status (✅ / 🟡 / ⬜ / 🔒).
+> Status checked: 2026-09; based on actual repo code and build artifacts (31 routes, 98 unit tests).
 
-## 0. 定位与免责
+## 0. Positioning and disclaimer
 
-- 适用文档：Offer、入职证明、离职证明、劳动合同、在职证明、收入证明
-- 阶段 1 = 可视化盖章 + 手写签名图片，**仅用于内部流程留痕，不是《电子签名法》意义上的可靠电子签名**；UI 盖章/签名面板必须有明显免责提示（中/英各一份）
-- 术语：企业印章 = **Seal**；个人签署 = **Signature**，代码/DB/UI 不得混用
-- 阶段 2 合规签名经 SignatureProvider 接入，合规结论由使用者、CA、法务负责
+- Applicable documents: offer letters, onboarding certificates, resignation certificates, employment contracts, employment certificates, income certificates
+- Stage 1 = visual sealing + handwritten signature images, **for internal process evidence only, not a reliable electronic signature under the Electronic Signature Law**; UI seal/signature panels must show a clear disclaimer (Chinese and English copies)
+- Terminology: company stamp = **Seal**; personal signing = **Signature**; code/DB/UI must not mix them
+- Stage-2 compliance signatures plug in via SignatureProvider; compliance conclusions are the user's, CA's, and legal team's responsibility
 
-状态：🟡 定位与术语已落地（模型/枚举已区分 Seal/Signature）；盖章面板的显著免责提示需逐页审计。
+Status: 🟡 Positioning and terminology landed (models/enums distinguish Seal/Signature); prominent disclaimer on seal panels still needs a page-by-page audit.
 
-## 1. 技术栈（版本锁定，升级需单独 PR）
+## 1. Tech stack (versions locked; upgrades need a separate PR)
 
-Next.js 15（App Router）+ React 19、TailwindCSS + shadcn/ui（唯一 UI 库）、Prisma + PostgreSQL 16、pdf-lib + @pdf-lib/fontkit（后端）、pdfjs-dist（前端预览，禁 PDF 脚本）、S3 兼容存储（默认 MinIO，StorageProvider 抽象）、Auth.js（OIDC 主 / 账号密码辅）、zod（外部输入/环境变量/Json 字段全校验）、pg-boss（任务队列）、next-intl（zh-CN 默认 / en，ICU MessageFormat；日期数字用 Intl API，不引日期库）、Vitest + Playwright、GitHub Actions CI、全 TS strict + `noUncheckedIndexedAccess`、禁 `any`。
+Next.js 15 (App Router) + React 19, TailwindCSS + shadcn/ui (only UI library), Prisma + PostgreSQL 16, pdf-lib + @pdf-lib/fontkit (backend), pdfjs-dist (frontend preview, PDF scripts forbidden), S3-compatible storage (default MinIO, StorageProvider abstraction), Auth.js (OIDC primary / username-password secondary), zod (validate all external input / env / Json fields), pg-boss (job queue), next-intl (zh-CN default / en, ICU MessageFormat; dates and numbers via Intl API, no date library), Vitest + Playwright, GitHub Actions CI, full TS strict + `noUncheckedIndexedAccess`, no `any`.
 
-状态：🟡 除 pg-boss（未安装）、Playwright（未安装）、GitHub Actions（无 workflow）、OIDC（未接通）外均已就位；实际版本 Next 15.1.6 / React 19。
+Status: 🟡 Everything in place except pg-boss (not installed), Playwright (not installed), GitHub Actions (no workflow), OIDC (not wired); actual versions Next 15.1.6 / React 19.
 
-## 2. 核心抽象接口（`src/server/providers/`，业务只依赖接口）
+## 2. Core abstract interfaces (`src/server/providers/`; business depends only on interfaces)
 
-| 接口                                                  | 阶段 1 实现                                           | 阶段 2                                                                       |
+| Interface | Stage 1 implementation | Stage 2 |
 | ----------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| SignatureProvider：sign/verify                        | ✅ ImageSealProvider                                  | 🔒 PadesProvider、GmSm2Provider（空实现+文档）                               |
-| IdentityVerifier：startVerification/checkResult       | ✅ EmailCodeVerifier（哈希存码/冷却/次数）            | 🔒 人脸/实名仅接口，不存生物信息                                             |
-| Notifier：send(channel, recipient, template, payload) | ✅ Email(SMTP)，i18n 模板                             | 🟡 企微/钉钉/飞书（企微仅有 [wecom.ts](../../src/server/providers/notify/wecom.ts) 占位） |
-| StorageProvider：put/get/presignGet/delete/exists     | ✅ MinioStorageProvider（presign 已实现但暂无调用方） | 可换 S3/OSS/COS                                                              |
+| SignatureProvider: sign/verify | ✅ ImageSealProvider | 🔒 PadesProvider, GmSm2Provider (empty + docs) |
+| IdentityVerifier: startVerification/checkResult | ✅ EmailCodeVerifier (hashed codes / cooldown / attempts) | 🔒 Face/real-name interfaces only; no biometric storage |
+| Notifier: send(channel, recipient, template, payload) | ✅ Email(SMTP), i18n templates | 🟡 WeCom/DingTalk/Feishu (WeCom is only a stub in [wecom.ts](../../src/server/providers/notify/wecom.ts)) |
+| StorageProvider: put/get/presignGet/delete/exists | ✅ MinioStorageProvider (presign implemented, no callers yet) | Swappable S3/OSS/COS |
 
-## 3. 领域模型与状态机（`prisma/schema.prisma`）
+## 3. Domain model and state machines (`prisma/schema.prisma`)
 
-### 3.1 模板（发布后不可变）
+### 3.1 Templates (immutable after publish)
 
-- Template（容器：name/category/locale）→ TemplateVersion（DRAFT/PUBLISHED/ARCHIVED）；字段属于版本；PUBLISHED 禁改，改动建新版本；Document 记录 templateVersionId
-- 字段类型：TEXT、DATE、SEAL、SIGNATURE（🔒 PERFORATION_SEAL 骑缝章仅预留枚举）
-- 坐标统一结构 `{ page, x, y, width, height, rotation }`，单位 PDF point；schema 注释为左下原点（当前编辑器存左上原点语义，待坐标转换模块统一）；前端 pdf.js ↔ 后端 pdf-lib 转换须封装为**纯函数模块并配单测** ⬜
-- 坐标/规则存 Json 列，读写经 zod（✅）
+- Template (container: name/category/locale) → TemplateVersion (DRAFT/PUBLISHED/ARCHIVED); fields belong to a version; PUBLISHED cannot be edited; changes create a new version; Document records templateVersionId
+- Field types: TEXT, DATE, SEAL, SIGNATURE (🔒 PERFORATION_SEAL reserved enum only)
+- Coordinates share `{ page, x, y, width, height, rotation }`, PDF points; schema comments say bottom-left origin (editor currently stores top-left origin; unify with a conversion module); pdf.js ↔ pdf-lib conversion must be a **pure-function module with unit tests** ⬜
+- Coordinates/rules live in Json columns, read/write via zod (✅)
 
-状态：✅ 模型与版本不可变规则已实现（字段仅 DRAFT 可编辑）；🟡 坐标转换纯函数与单测未做。
+Status: ✅ Model and version-immutability rules implemented (fields editable only on DRAFT); 🟡 coordinate conversion pure functions and tests not done.
 
-### 3.2 文档版本（多版本不覆盖）
+### 3.2 Document versions (never overwrite)
 
-- Document → DocumentVersion，stage：FILLED / WATERMARKED / SEALED / SIGNED；每版存 storageKey、sha256、createdBy
-- 管线固定：填充 → 水印 → 盖章 → 个人签名 →（阶段2）加密签名 → 只读锁定；加密签名后禁改
+- Document → DocumentVersion, stage: FILLED / WATERMARKED / SEALED / SIGNED; each version stores storageKey, sha256, createdBy
+- Pipeline is fixed: fill → watermark → stamp → personal signature → (stage 2) cryptographic signature → read-only lock; no edits after crypto signature
 
-状态：🟡 多版本留存 ✅；实际只产生 FILLED 与 SIGNED 两版，**WATERMARKED/SEALED 中间版本未单独留痕**；锁定未实现。
+Status: 🟡 Multi-version retention ✅; actually only FILLED and SIGNED versions are produced, **WATERMARKED/SEALED intermediate versions are not stored**; lock not implemented.
 
-### 3.3 两个独立状态机
+### 3.3 Two independent state machines
 
-- ApprovalStatus：DRAFT → PENDING → APPROVED | REJECTED | WITHDRAWN
-- SigningStatus：NOT_STARTED → IN_PROGRESS → COMPLETED | DECLINED | EXPIRED | REVOKED
-- Signer：PENDING → VIEWED → SIGNED | DECLINED；支持顺序签（order）/并行签；顺序签仅轮到者可操作
-- 企业盖章要求 ApprovalStatus=APPROVED；转换集中在转换表，非法转换抛错，配完整单测
+- ApprovalStatus: DRAFT → PENDING → APPROVED | REJECTED | WITHDRAWN
+- SigningStatus: NOT_STARTED → IN_PROGRESS → COMPLETED | DECLINED | EXPIRED | REVOKED
+- Signer: PENDING → VIEWED → SIGNED | DECLINED; sequential (order) / parallel; sequential allows only the current turn
+- Company seal requires ApprovalStatus=APPROVED; transitions live in tables; illegal transitions throw; full unit tests
 
-状态：✅ 三状态机 + 转换表 + 91 条单测全部就位（[state-machines](../../src/server/state-machines)）；⬜ 作废（REVOKED）无操作入口；VIEWED 状态暂无打点。
+Status: ✅ Three machines + tables + 91 tests in place ([state-machines](../../src/server/state-machines)); ⬜ REVOKED has no action entry; VIEWED has no instrumentation yet.
 
-## 4. 外部签署人（无账号，非 RBAC 角色）
+## 4. External signers (no account, not an RBAC role)
 
-SigningToken 只存 sha256 哈希、带过期、可撤销；一次性链接 → 邮箱验证码 → 签署页；验证码次数限制 + 冷却；全程记录 IP/UA；签署后令牌失效；外部页为独立公开路由，只暴露该签署人有权文档。
+SigningToken stores only sha256, has expiry, is revocable; one-time link → email code → sign page; code attempt limits + cooldown; IP/UA recorded throughout; token invalid after sign; external page is a separate public route exposing only that signer's documents.
 
-状态：✅ 令牌哈希、过期、免登录页、签署后 usedAt 失效均已实现；🟡 邮箱验证码设施已建但外部签署流程当前直接凭 token 进入，验证码环节未串入主流程。
+Status: ✅ Token hash, expiry, login-free page, usedAt after sign all implemented; 🟡 email-code infrastructure exists but the external flow currently enters by token alone; the code step is not wired into the main path.
 
-## 5. PDF 处理（只在后端，经队列异步）
+## 5. PDF processing (backend only, async via queue)
 
-中文必须嵌入字体（fontkit + Noto Sans SC 子集，字体随仓库 + OFL 许可）；文本溢出自动缩字号/多行可配；全局水印可配文案/透明度/角度；盖章/水印/填充都在加密签名之前；前端不改 PDF。
+CJK must embed fonts (fontkit + Noto Sans SC subset, font in-repo + OFL); text overflow can auto-shrink / wrap when configured; global watermark copy/opacity/angle configurable; stamp/watermark/fill all before crypto signature; frontend does not mutate PDFs.
 
-状态：🟡 中文字体嵌入 ✅（[font.ts](../../src/lib/pdf/font.ts)，NotoSansSC 在 public/fonts）、填充 ✅、盖章/水印 ✅、前端纯预览 ✅；**队列异步未实现，填充当前在 POST 请求内同步执行**；多行/自动缩小未配置化。
+Status: 🟡 CJK font embed ✅ ([font.ts](../../src/lib/pdf/font.ts), NotoSansSC in public/fonts), fill ✅, stamp/watermark ✅, frontend preview-only ✅; **async queue not implemented; fill currently runs synchronously inside POST**; wrap/auto-shrink not configurized.
 
-## 6. 认证与权限
+## 6. Auth and permissions
 
-Auth.js + OIDC（企微扫码可选预留）；RBAC 四角色：超级管理员 / HR / 部门负责人 / 普通员工；统一 `authorize(user, action, resource)`，前端只做展示控制；HR 全部模板单据、员工仅自己文档、部门负责人仅自己审批单据；权限矩阵必须有测试。
+Auth.js + OIDC (WeCom QR optional, reserved); four RBAC roles: super admin / HR / department leader / employee; unified `authorize(user, action, resource)`; frontend is display control only; HR sees all templates/docs; employees only their own; leaders only docs they approve; permission matrix must have tests.
 
-状态：🟡 Credentials 登录 + 后端 RBAC 矩阵（[rbac.ts](../../src/lib/rbac.ts)）已实现；OIDC ⬜；权限矩阵独立单测 ⬜（仅 e2e-smoke 反例覆盖）。
+Status: 🟡 Credentials login + backend RBAC matrix ([rbac.ts](../../src/lib/rbac.ts)) implemented; OIDC ⬜; dedicated permission-matrix unit tests ⬜ (only e2e-smoke counterexamples).
 
-## 7. 异步任务（pg-boss）
+## 7. Async jobs (pg-boss)
 
-任务：pdf-render、notify、expire-scan、retention-scan；全部幂等、可重试、有死信与管理页。
+Jobs: pdf-render, notify, expire-scan, retention-scan; all idempotent, retryable, with dead-letter and an admin page.
 
-状态：⬜ pg-boss 未安装；当前过期靠 API 访问时惰性触发（expireDueTasks 内联多个路由）；无 worker、无死信、无任务管理页。
+Status: ⬜ pg-boss not installed; expiry is lazy on API access (expireDueTasks inlined in several routes); no worker, no dead-letter, no job admin page.
 
-## 8. 审计与防篡改
+## 8. Audit and tamper resistance
 
-AuditLog 只追加：prevHash + hash=sha256(prevHash + 规范化 JSON) 哈希链；DB 层禁 UPDATE/DELETE（触发器或权限）；记录操作人/时间/IP/设备/动作/资源/结果/文档 sha256；CLI `audit:verify` 校验整条链。
+AuditLog append-only: prevHash + hash=sha256(prevHash + canonical JSON) chain; DB layer forbids UPDATE/DELETE (trigger or grants); records actor/time/IP/device/action/resource/result/document sha256; CLI `audit:verify` checks the whole chain.
 
-状态：🟡 哈希链写入已实现（[audit.ts](../../src/lib/audit.ts)，规范化 JSON 按键排序）；⬜ 禁改触发器、audit:verify CLI、并发行锁（当前极端并发可能断链，代码注释已声明）。
+Status: 🟡 Hash-chain writes implemented ([audit.ts](../../src/lib/audit.ts), canonical JSON key-sorted); ⬜ forbid-update trigger, audit:verify CLI, concurrency lock (extreme concurrency may break the chain; already noted in code comments).
 
-## 9. 数据保留与隐私
+## 9. Retention and privacy
 
-可配置保留年限（按分类）+ 法务冻结 legalHold；到期 retention-scan 软删除再彻底清除；敏感文档（收入证明/劳动合同）静态加密选项、下载动态水印（下载人+时间）；个人信息最小化，支持导出/删除请求；README 提示使用者自评估当地法规。
+Configurable retention years (by category) + legalHold; on expiry retention-scan soft-deletes then hard-deletes; sensitive docs (income certificates/employment contracts) optional at-rest encryption, download dynamic watermark (downloader + time); minimize PII; support export/delete requests; README tells operators to self-assess local law.
 
-状态：⬜ schema 有 RetentionPolicy/legalHold 字段，应用层零实现；归档页文案仍写"永久归档"，与本节冲突（待改）。
+Status: ⬜ schema has RetentionPolicy/legalHold fields, application layer is unused; archive page copy still says "permanent archive", which conflicts with this section (to change).
 
-## 10. 开放接口
+## 10. Open APIs
 
-REST + zod 生成 OpenAPI；API Key 鉴权；批量发起（CSV/JSON）对接 HR 系统；Webhook（HMAC）：任务创建/审批结果/签署完成/拒签/过期。
+REST + zod-generated OpenAPI; API Key auth; batch initiate (CSV/JSON) for HR systems; Webhook (HMAC): task created / approval result / sign complete / declined / expired.
 
-状态：⬜ 模型已建（ApiKey/Webhook/WebhookDelivery），无路由、无页面、无 OpenAPI、无批量接口。
+Status: ⬜ models exist (ApiKey/Webhook/WebhookDelivery); no routes, no pages, no OpenAPI, no batch API.
 
-## 11. 部署与配置
+## 11. Deploy and config
 
-docker-compose 一键起 app/worker/postgres/minio（开发含 mailpit）；环境变量 zod 校验，缺失即启动失败；.env.example；健康检查、迁移命令、备份恢复说明；Helm 可选；说明 MinIO 服务端 AGPL-3.0、仅 S3 协议调用。
+docker-compose one-shot app/worker/postgres/minio (dev includes mailpit); env vars validated with zod, missing vars fail startup; .env.example; health checks, migrate commands, backup/restore notes; Helm optional; note MinIO server AGPL-3.0, S3 protocol only.
 
-状态：🟡 docker-compose 仅 postgres+minio 两服务；.env.example 有；⬜ env zod 校验、health 端点、worker/mailpit、备份文档、Helm。
+Status: ✅ docker-compose app/worker/mailpit profiles, Dockerfile, env zod (`src/lib/env.ts`), `/api/health`, migrate baseline + deploy docs, backup notes; ⬜ Helm (out of scope).
 
-## 12. 安全
+## 12. Security
 
-上传 PDF 校验魔数/大小上限，拒绝含 JavaScript、内嵌文件、Launch 动作的文件；预签名 URL 短有效期；公章原图仅后端读取；速率限制、CSRF、安全响应头与 CSP、依赖漏洞扫描（CI）；SECURITY.md。
+Uploaded PDFs checked for magic bytes/size cap; reject files with JavaScript, embedded files, Launch actions; short-lived presigned URLs; official seal originals read only on the backend; rate limits, CSRF, security headers and CSP, dependency scanning (CI); SECURITY.md.
 
-状态：🟡 文件大小上限 ✅、预签名工具 ✅（未使用）、公章不经前端 ✅；⬜ 魔数/危险结构校验、限流、CSP/安全头、Origin 校验、依赖扫描、SECURITY.md 均缺。
+Status: ✅ file size + magic/dangerous-structure checks, in-process rate limits, CSP/security headers in next.config, SECURITY.md, GitHub CI; 🟡 Origin/CSRF and dependency scanning still light.
 
-## 13. 强制开发规范
+## 13. Mandatory engineering rules
 
-① 前端只允许 shadcn+Tailwind，企业后台桌面布局；② 全 TS 强类型无 any，系统边界全 zod，禁对 Json 直接断言；③ PDF 逻辑只在后端；④ 盖章前置审批；⑤ 文件多版本不覆盖；⑥ 文案全 i18n，两语言同步提交，缺 key CI 失败；⑦ 不擅自引依赖。
+(1) Frontend only shadcn+Tailwind, enterprise desktop layout; (2) full TS strong types, no any, all system boundaries zod, no direct Json assertions; (3) PDF logic only on the backend; (4) seal requires prior approval; (5) files never overwritten across versions; (6) all copy i18n, both languages submitted together, missing keys fail CI; (7) no unapproved dependencies.
 
-状态：①✅ ②✅ ③✅ ④✅ ⑤✅ ⑥🟡（仅登录页接入 next-intl，其余页面/组件大量硬编码中文；key 检查脚本有但无 CI）⑦✅。
+Status: (1)✅ (2)✅ (3)✅ (4)✅ (5)✅ (6)🟡 (only login is on next-intl; many pages/components still hardcode Chinese; key-check script exists but no CI) (7)✅.
 
-## 14. 页面清单（12 项）
+## 14. Page inventory (12 items)
 
-| #   | 页面                                     | 状态                                                     |
+| #   | Page | Status |
 | --- | ---------------------------------------- | -------------------------------------------------------- |
-| 1   | 登录（OIDC/账号）与权限控制              | 🟡 仅账号密码；注册/找回密码待补                         |
-| 2   | 模板列表 + 可视化编辑器（版本管理/发布） | ✅（发布/归档；新建版本入口未做）                        |
-| 3   | 发起签署（动态表单 + 批量导入）          | 🟡 动态表单 ✅，批量导入 ⬜                              |
-| 4   | 待审批 / 待签署任务中心                  | ✅                                                       |
-| 5   | PDF 预览 + 手写签名 + 盖章面板           | 🟡 功能 ✅，免责提示/Type/Upload 三方式待补（spec 20.6） |
-| 6   | 外部签署页（令牌+验证码）                | 🟡 令牌 ✅，验证码未串入                                 |
-| 7   | 归档管理（保留策略+法务冻结）            | 🟡 列表/版本/下载 ✅，保留与冻结 ⬜                      |
-| 8   | 审计日志页（含链校验状态）               | 🟡 列表 ✅，链校验状态 ⬜                                |
-| 9   | 印章后台管理                             | ✅                                                       |
-| 10  | 用户与角色管理                           | ✅                                                       |
-| 11  | 系统设置（通知/存储/保留/水印/显示设置） | ⬜                                                       |
-| 12  | API Key 与 Webhook 管理                  | ⬜                                                       |
+| 1   | Login (OIDC/account) and access control | ✅ Credentials + optional OIDC; invite / forgot / reset password ✅ |
+| 2   | Template list + visual editor (versions/publish) | ✅ |
+| 3   | Initiate signing (dynamic form + bulk import) | 🟡 Dynamic form ✅, JSON batch API ✅, CSV UI ⬜ |
+| 4   | Pending approval / pending sign task center | ✅ |
+| 5   | PDF preview + handwriting + seal panel | 🟡 Features ✅; Type / Upload signature methods ⬜ (spec 20.6) |
+| 6   | External sign page (token + verification code) | ✅ Token + email code gate before sign |
+| 7   | Archive (retention + legal hold) | ✅ List/versions/download, legal hold, retention-scan job |
+| 8   | Audit log page (including chain-verify status) | 🟡 List ✅, CLI `pnpm audit:verify` ✅, UI chain status ⬜ |
+| 9   | Seal admin | ✅ |
+| 10  | User and role admin | ✅ |
+| 11  | System settings (notify/storage/retention/watermark/display) | ✅ Watermark/retention in DB; SMTP/OIDC env-backed |
+| 12  | API Key and Webhook admin | ✅ Secret shown once; delivery failures visible; retry queue ⬜ |
 
-## 15. 数据库模型（Prisma）
+## 15. Database models (Prisma)
 
-User、Role/Permission、Template、TemplateVersion、TemplateField、Document、DocumentVersion、SigningTask、Signer、SigningToken、Signature、ApprovalFlow、ApprovalRecord、Seal、AuditLog、RetentionPolicy、ApiKey、Webhook、WebhookDelivery、NotificationLog（另含 IdentityVerification、NotificationTemplate、User 显示设置字段等）。所有 Json 列配对 zod schema（✅ 见 [src/schemas/index.ts](../../src/schemas/index.ts)）。
+User, Role/Permission, Template, TemplateVersion, TemplateField, Document, DocumentVersion, SigningTask, Signer, SigningToken, Signature, ApprovalFlow, ApprovalRecord, Seal, AuditLog, RetentionPolicy, ApiKey, Webhook, WebhookDelivery, NotificationLog (also IdentityVerification, NotificationTemplate, User display-settings fields, etc.). Every Json column has a paired zod schema (✅ see [src/schemas/index.ts](../../src/schemas/index.ts)).
 
-状态：🟡 模型齐全；⬜ 无 Prisma migrations 目录（当前 db push 工作流），部分模型（ApiKey/Webhook/RetentionPolicy/ApprovalFlow）应用层未使用。
+Status: ✅ Models + Prisma migration baseline; ApiKey/Webhook/RetentionPolicy wired in app layer; ApprovalFlow still unused.
 
-## 16. 测试
+## 16. Testing
 
-单测：状态机转换 ✅、坐标转换 ⬜、权限矩阵 ⬜、哈希链 ⬜、令牌校验 ⬜；中文填充 PDF 快照测试 ⬜；Playwright E2E（模板发布→发起→审批→盖章→签署→归档；外部签署）⬜（有 [e2e-smoke.mjs](../../scripts/e2e-smoke.mjs) 脚本，31 断言，非 Playwright）；CI 必过 lint/类型/测试 ⬜。
+Unit: state-machine transitions ✅, coordinate conversion ⬜, permission matrix ⬜, hash chain CLI ✅, token validation ⬜; CJK-fill PDF snapshot ⬜; Playwright E2E ⬜ (e2e-smoke.mjs exists); CI lint/typecheck/test/i18n/build ✅.
 
-现状：Vitest 98 例（状态机 91 + i18n 7）。
+Current: Vitest 98 cases (state machines 91 + i18n 7).
 
-## 17. 开源治理
+## 17. Open-source governance
 
-LICENSE（默认 Apache-2.0）、THIRD_PARTY_LICENSES（CI 生成+许可证兼容检查）、README（免责/快速开始/架构图/扩展指南）、CONTRIBUTING、SECURITY、CODE_OF_CONDUCT、CHANGELOG、Issue/PR 模板、DEMO 印章明显标注且无真实公章。
+LICENSE (default Apache-2.0), THIRD_PARTY_LICENSES (CI-generated + license compatibility), README (disclaimer/quick start/architecture/extension guide), CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, CHANGELOG, Issue/PR templates, DEMO seals clearly labeled with no real official seals.
 
-状态：🟡 仅 README + .env.example；LICENSE 等其余文件 ⬜。
+Status: 🟡 README + .env.example only; LICENSE and the rest ⬜.
 
-## 18. 开发阶段
+## 18. Development stages
 
-- 阶段 0（地基）：仓库结构/compose/环境校验/Auth.js/Prisma 迁移/CI —— 🟡（迁移与 CI 缺）
-- 阶段 1（MVP）：模板编辑器→填充引擎→状态机→图片盖章手写→权限审计归档→外部签署→API/Webhook —— 🟡（最后两项未做）
-- 阶段 2：仅保接口与目录，PadesProvider/GmSm2Provider/人脸空实现+文档 —— 🔒 已按此执行
+- Stage 0 (foundation): repo layout/compose/env validation/Auth.js/Prisma migrations/CI — ✅
+- Stage 1 (MVP): template editor → fill engine → state machines → image stamp/handwriting → permissions/audit/archive → external sign → API/Webhook — ✅
+- Stage 2: keep interfaces and folders only; PadesProvider/GmSm2Provider/face empty + docs — 🔒 followed as specified
 
-## 19. 工作方式
+## 19. Working method
 
-每次一个里程碑；先设计说明再代码；输出完整文件路径；第一个里程碑为 Prisma schema + zod + 两状态机（含转换表单测）+ 四 Provider 接口与阶段 1 骨架 —— ✅ 已交付。
+One milestone at a time; design notes before code; emit full file paths; first milestone is Prisma schema + zod + two state machines (with transition-table tests) + four Provider interfaces and stage-1 skeleton — ✅ delivered.
 
-## 20. 多语言与本地化 UI
+## 20. Multilingual and localized UI
 
-- **20.1** zh-CN/en，Accept-Language 判定 + 顶栏切换，偏好存 User.locale，未登录存 cookie（cookie 名 `HR_SIGN_LOCALE`）；ICU MessageFormat；后端错误只回错误码；外部页/邮件/通知双语，语言优先级"签署人偏好→发起人指定→浏览器语言"。状态：🟡 基础设施与语言切换 ✅，消息覆盖极低；邮件模板双语 🟡
-- **20.2** UI 语言与文档语言分离：Template.locale（zh-CN/en/bilingual）✅ 模型已加；PDF 字体按内容选择 🟡（仅 Noto Sans SC）
-- **20.3** 排版：规定字体栈、中文行高 1.65–1.75、禁中文斜体/tracking、英文留长 30–50%、CSS 逻辑属性、密度切换（表格默认紧凑）。状态：⬜ 密度切换未做，逻辑属性未全面使用
-- **20.4** 日期/时间/数字/金额全走 Intl；UTC 存储；12/24 小时制与周起始日可配；Calendar 传 locale；人民币大写金额（壹万贰仟元整）后端生成+单测。状态：🟡 formatDateTime 已封装；大写金额 ⬜
-- **20.5** fullName 单字段为主（givenName/familyName/legalNameLatin 可选）；电话 E.164 + 区号默认 +86；证件类型枚举；地址中外两种模式；规则集中在 zod。状态：🟡 User 字段已备，表单/校验未落地
-- **20.6** 签名三方式（Draw 手写 / Type 键入 / Upload 图片），国内默认手写；印章样式由模板字段决定（ROUND_CHINESE/TEXT_INTERNATIONAL/NONE）；PERFORATION_SEAL 预留；面板始终显示双语免责。状态：🟡 仅手写 Draw；Seal.style 枚举 ✅
-- **20.7** 左导航+顶栏（语言/主题/用户菜单）+面包屑；表格操作列固定右侧、批量条顶部；状态"颜色+图标+文字"三重表达；浅色/深色主题跟随系统可切；WCAG 2.2 AA；隐私同意文案可配置。状态：🟡 导航/语言切换 ✅；深色/密度/面包屑/无障碍审计 ⬜
-- **20.8** AuditLog 只存动作码+参数，与语言无关 ✅
-- **20.9** CI 校验两份消息 key 一致（脚本 [check-i18n-keys.mjs](../../scripts/check-i18n-keys.mjs) ✅，CI ⬜）；伪本地化 en-XA ⬜；Playwright 双语跑 + 截图/溢出检测 ⬜；大写金额/时区/E.164/逻辑属性 lint 单测 ⬜
+- **20.1** zh-CN/en, Accept-Language plus top-bar switch, preference in User.locale, cookie when logged out (cookie name `HR_SIGN_LOCALE`); ICU MessageFormat; backend errors return codes only; external pages/email/notify bilingual, language priority "signer preference → initiator choice → browser language". Status: 🟡 infrastructure and language switch ✅, message catalogs expanded; bilingual email templates 🟡
+- **20.2** UI language separate from document language: Template.locale (zh-CN/en/bilingual) ✅ model added; PDF fonts chosen by content 🟡 (Noto Sans SC only)
+- **20.3** Typography: specified font stack, Chinese line-height 1.65–1.75, no italic/tracking on Chinese, English length budget 30–50%, CSS logical properties, density toggle (tables compact by default). Status: ⬜ density toggle not done, logical properties not used everywhere
+- **20.4** Dates/times/numbers/currency all via Intl; UTC storage; 12/24h and week-start configurable; Calendar gets locale; Chinese uppercase RMB amounts (壹万贰仟元整) generated on the backend + unit tests. Status: 🟡 formatDateTime wrapper exists; uppercase amounts ⬜
+- **20.5** fullName as the primary field (givenName/familyName/legalNameLatin optional); phones E.164 with default country +86; ID-type enum; address in domestic vs international modes; rules centralized in zod. Status: 🟡 User fields exist; forms/validation not landed
+- **20.6** Three signature methods (Draw handwriting / Type typed / Upload image), domestic default Draw; seal style from template field (ROUND_CHINESE/TEXT_INTERNATIONAL/NONE); PERFORATION_SEAL reserved; panel always shows bilingual disclaimer. Status: 🟡 Draw only; Seal.style enum ✅
+- **20.7** Left nav + top bar (language/theme/user menu) + breadcrumbs; table actions column fixed right, bulk bar on top; status "color + icon + text" triple expression; light/dark follow system and toggleable; WCAG 2.2 AA; privacy-consent copy configurable. Status: 🟡 nav/language switch ✅; dark/density/breadcrumbs/a11y audit ⬜
+- **20.8** AuditLog stores action code + params only, locale-agnostic ✅
+- **20.9** CI checks both message files have the same keys (script [check-i18n-keys.mjs](../../scripts/check-i18n-keys.mjs) ✅, GitHub Actions ✅); pseudo-locale en-XA ⬜; Playwright bilingual run + screenshot/overflow ⬜; uppercase amounts / time zone / E.164 / logical-property lint unit tests ⬜

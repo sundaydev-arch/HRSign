@@ -9,21 +9,21 @@ datasource db {
 
 // =================================================================
 // HRSign Prisma Schema
-// 规范：开源人事电子签署与盖章系统（HR e-Sign Workflow）
-// 术语：企业印章 = Seal；个人签署 = Signature（不得混用）
-// 所有 Json 列在代码中配对一个 zod schema（见 src/schemas/）
+// Spec: open-source HR e-sign and sealing system
+// Terms: company stamp = Seal; personal signing = Signature (do not mix)
+// Every Json column has a paired zod schema in src/schemas/
 // =================================================================
 
-// ============ 用户与权限（spec 6 / 20.5）============
+// ============ Users and permissions (spec 6 / 20.5) ============
 
 enum UserRole {
-  SUPER_ADMIN   // 超级管理员
-  HR            // 人事
-  DEPT_LEADER   // 部门负责人
-  EMPLOYEE      // 普通员工
+  SUPER_ADMIN   // Super admin
+  HR            // HR
+  DEPT_LEADER   // Department lead
+  EMPLOYEE      // Employee
 }
 
-// spec 20：User 显示设置
+// spec 20: user display settings
 enum UserLocale {
   zh_CN
   en
@@ -40,8 +40,8 @@ enum UserWeekStart {
 }
 
 enum UserDensity {
-  COMPACT     // 紧凑（表格页默认）
-  COMFORTABLE // 舒适（默认）
+  COMPACT     // Compact (table pages default)
+  COMFORTABLE // Comfortable (default)
 }
 
 enum UserTheme {
@@ -53,19 +53,19 @@ enum UserTheme {
 model User {
   id            String          @id @default(cuid())
   email         String          @unique
-  // spec 20.5：姓名以 fullName 单字段为主
+  // spec 20.5: name is stored as a single fullName field
   fullName      String
   givenName     String?
   familyName    String?
   legalNameLatin String?
-  // 账号密码（辅）；OIDC 登录用户无密码
+  // Password auth (secondary); OIDC users have no password
   passwordHash  String?
-  // OIDC subject（主）
+  // OIDC subject (primary)
   oidcSubject   String?         @unique
   role          UserRole        @default(EMPLOYEE)
   isActive      Boolean         @default(true)
 
-  // spec 20：显示设置
+  // spec 20: display settings
   locale        UserLocale      @default(zh_CN)
   timezone      String          @default("Asia/Shanghai")
   timeFormat    UserTimeFormat  @default(H24)
@@ -73,13 +73,16 @@ model User {
   density       UserDensity     @default(COMFORTABLE)
   theme         UserTheme       @default(SYSTEM)
 
-  // spec 20.5：电话 E.164 存储
+  // spec 20.5: phone stored in E.164
   phoneE164     String?
+
+  departmentId  String?
+  department    Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  // 关系
+  // Relations
   createdTemplates         Template[]         @relation("TemplateCreator")
   createdTemplateVersions  TemplateVersion[]  @relation("TemplateVersionCreator")
   documents                Document[]         @relation("DocumentCreator")
@@ -93,14 +96,52 @@ model User {
   notificationLogsSent     NotificationLog[]  @relation("NotificationRecipient")
   seals                    Seal[]             @relation("SealCreator")
   signatures               Signature[]        @relation("SignatureOperator")
+  credentialTokens         AuthCredentialToken[]
+  ledDepartments           Department[]       @relation("DepartmentLeader")
+  envelopesCreated         Envelope[]         @relation("EnvelopeCreator")
+  envelopeComments         EnvelopeComment[]  @relation("EnvelopeCommentAuthor")
+  accountMemberships       AccountMember[]
 
+  @@index([departmentId])
   @@map("users")
 }
 
-// spec 6：权限矩阵"角色 × 动作 × 资源"
-// Permission 表登记所有 (action, resource) 组合
-// RolePermission 表存储角色与权限的对应（可由管理员维护）
-// 实际 authorize(user, action, resource) 在代码中实现并有单测（spec 16）
+model Department {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  leaderUserId String?
+  leader       User?    @relation("DepartmentLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
+  users        User[]
+  policies     ApprovalPolicy[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("departments")
+}
+
+/// Reusable approval policy — injects APPROVER signers when creating a task.
+model ApprovalPolicy {
+  id              String            @id @default(cuid())
+  name            String
+  category        TemplateCategory?
+  departmentId    String?
+  department      Department?       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  /// Ordered User ids used as APPROVER signers when creating a task
+  approverUserIds String[]          @default([])
+  required        Boolean           @default(true)
+  enabled         Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([category])
+  @@index([departmentId])
+  @@map("approval_policies")
+}
+
+// spec 6: permission matrix "role x action x resource"
+// Permission lists all (action, resource) pairs
+// RolePermission maps roles to permissions (admin-maintainable)
+// authorize(user, action, resource) is implemented in code with unit tests (spec 16)
 
 model Permission {
   id            String           @id @default(cuid())
@@ -123,17 +164,17 @@ model RolePermission {
   @@map("role_permissions")
 }
 
-// ============ 模板（spec 3.1：发布后不可变）============
+// ============ Templates (spec 3.1: immutable after publish) ============
 
 enum TemplateCategory {
   OFFER        // offer
-  ENTRY        // 入职证明
-  CONTRACT     // 劳动合同
-  RESIGN       // 离职证明
-  CERTIFICATE  // 在职/收入证明
+  ENTRY        // Onboarding certificate
+  CONTRACT     // Employment contract
+  RESIGN       // Offboarding certificate
+  CERTIFICATE  // Employment / income certificate
 }
 
-// spec 20.2：Template 增加 locale 字段
+// spec 20.2: Template has a locale field
 enum TemplateLocale {
   zh_CN
   en
@@ -166,11 +207,15 @@ model TemplateVersion {
   template    Template              @relation(fields: [templateId], references: [id], onDelete: Cascade)
   version     Int
   status      TemplateVersionStatus @default(DRAFT)
-  // 模板原 PDF 的 storageKey（spec 3.1：发布后不可变）
+  // Original template PDF storageKey (spec 3.1: immutable after publish)
   storageKey  String                @unique
   sha256      String
   pageCount   Int
-  // spec 5：水印配置（Json，由 zod 校验）
+  // DOCUMENT = TipTap online doc; PDF_OVERLAY = uploaded PDF + field coordinates
+  editorMode  TemplateEditorMode    @default(PDF_OVERLAY)
+  // TipTap JSON document (DOCUMENT mode only); zod: src/schemas/document-content.ts
+  contentJson Json?
+  // spec 5: watermark config (Json, validated by zod)
   watermarkConfig Json?
   fields      TemplateField[]
   documents   Document[]
@@ -186,13 +231,18 @@ model TemplateVersion {
   @@map("template_versions")
 }
 
-// spec 3.1：字段类型
+enum TemplateEditorMode {
+  DOCUMENT
+  PDF_OVERLAY
+}
+
+// spec 3.1: field types
 enum FieldType {
   TEXT
   DATE
-  SEAL              // 企业签章域
-  SIGNATURE         // 个人签名域
-  PERFORATION_SEAL  // 骑缝章（spec 20.6 预留，阶段1不实现）
+  SEAL              // Company seal field
+  SIGNATURE         // Personal signature field
+  PERFORATION_SEAL  // Perforation seal (spec 20.6 reserved, not in phase 1)
 }
 
 model TemplateField {
@@ -201,18 +251,18 @@ model TemplateField {
   templateVersion   TemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
   type              FieldType
   label             String
-  // spec 3.1：坐标结构 { page, x, y, width, height, rotation } 存 Json 列
-  // 单位 PDF point，原点左下角；PERFORATION_SEAL 可表达跨页
-  // 读写必须经过 zod schema（src/schemas/coordinates.ts）
+  // spec 3.1: geometry { page, x, y, width, height, rotation } in a Json column
+  // Units: PDF points, origin bottom-left; PERFORATION_SEAL may span pages
+  // Read/write must go through the zod schema (src/schemas/coordinates.ts)
   coordinates       Json
   required          Boolean         @default(false)
   defaultValue      String?
-  // spec 3.1：校验规则存 Json 列，读写经 zod
+  // spec 3.1: validation rules in Json, read/write via zod
   validationRules   Json?
-  // spec 5：字体配置
+  // spec 5: font config
   fontSize          Int             @default(12)
   fontFamily        String?
-  // spec 20.2：多语言标签（Json，键为 locale）
+  // spec 20.2: multilingual labels (Json keyed by locale)
   labelI18n         Json?
   sortOrder         Int             @default(0)
 
@@ -222,22 +272,22 @@ model TemplateField {
   @@map("template_fields")
 }
 
-// ============ 印章（spec 0/4：Seal = 企业印章）============
+// ============ Seals (spec 0/4: Seal = company stamp) ============
 
 enum SealStyle {
-  ROUND_CHINESE        // 圆形公章（国内）
-  TEXT_INTERNATIONAL   // 文字公司章（国际）
-  NONE                 // 不盖章（spec 20.6：由模板字段决定，不写死）
+  ROUND_CHINESE        // Round official seal (CN)
+  TEXT_INTERNATIONAL   // Text company seal (intl)
+  NONE                 // No seal (spec 20.6: driven by template fields)
 }
 
 model Seal {
   id         String    @id @default(cuid())
   name       String
   style      SealStyle @default(ROUND_CHINESE)
-  // spec 12：公章原图仅后端读取，不下发前端
+  // spec 12: original seal image is backend-only, never sent to the client
   storageKey String    @unique
   sha256     String
-  // 尺寸（PDF point）
+  // Size (PDF points)
   width      Float
   height     Float
   enabled    Boolean   @default(true)
@@ -251,13 +301,13 @@ model Seal {
   @@map("seals")
 }
 
-// ============ 文档与版本（spec 3.2：多版本留存不覆盖）============
+// ============ Documents and versions (spec 3.2: never overwrite) ============
 
 enum DocumentVersionStage {
-  FILLED       // 表单数据填充
-  WATERMARKED  // 加水印
-  SEALED       // 企业盖章
-  SIGNED       // 个人签名（含阶段2加密签名）
+  FILLED       // Form values filled
+  WATERMARKED  // Watermark applied
+  SEALED       // Company seal applied
+  SIGNED       // Personal signature (incl. phase-2 crypto signatures)
 }
 
 model Document {
@@ -266,17 +316,17 @@ model Document {
   templateVersion   TemplateVersion  @relation(fields: [templateVersionId], references: [id])
   title             String
   category          TemplateCategory
-  // 业务字段值（用于生成 PDF 的填充数据），由 zod schema 校验
+  // Business field values used to fill the PDF, validated by zod
   fieldValues       Json?
   createdBy         String
   creator           User             @relation("DocumentCreator", fields: [createdBy], references: [id])
   versions          DocumentVersion[]
   signingTask       SigningTask?
-  // spec 9：法务冻结
+  // spec 9: legal hold
   legalHold         Boolean          @default(false)
   legalHoldReason   String?
   legalHoldUntil    DateTime?
-  // spec 9：到期由 retention-scan 软删除
+  // spec 9: soft-deleted by retention-scan when due
   deletedAt         DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime        @updatedAt
@@ -291,13 +341,13 @@ model DocumentVersion {
   document    Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
   version     Int
   stage       DocumentVersionStage
-  // spec 2：StorageProvider key 含版本号，禁止覆盖写
-  // 形如 documents/{docId}/v{version}-{stage}.pdf
+  // spec 2: StorageProvider key includes version; overwrite is forbidden
+  // Shape: documents/{docId}/v{version}-{stage}.pdf
   storageKey  String                @unique
   sha256      String
   createdBy   String
   creator     User                  @relation("DocumentVersionCreator", fields: [createdBy], references: [id])
-  // spec 3.2：加密签名后只读锁定（阶段2 才会真正锁定，阶段1 仅记录字段）
+  // spec 3.2: read-only lock after crypto sign (phase 2; phase 1 records the field only)
   lockedAt    DateTime?
   createdAt   DateTime              @default(now())
 
@@ -308,14 +358,14 @@ model DocumentVersion {
   @@map("document_versions")
 }
 
-// ============ 签署任务（spec 3.3：两个独立状态机）============
+// ============ Signing tasks (spec 3.3: two independent state machines) ============
 
 enum SigningFlowType {
-  SEQUENTIAL  // 顺序签
-  PARALLEL    // 并行签
+  SEQUENTIAL  // Sequential
+  PARALLEL    // Parallel
 }
 
-// 状态机1：ApprovalStatus
+// State machine 1: ApprovalStatus
 enum ApprovalStatus {
   DRAFT
   PENDING
@@ -324,7 +374,7 @@ enum ApprovalStatus {
   WITHDRAWN
 }
 
-// 状态机2：SigningStatus
+// State machine 2: SigningStatus
 enum SigningStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -342,9 +392,9 @@ enum SignerStatus {
 }
 
 enum SignerRole {
-  APPROVER            // 审批人
-  COMPANY_SEAL        // 企业盖章签署人
-  PERSONAL_SIGNATURE  // 个人签署人
+  APPROVER            // Approver
+  COMPANY_SEAL        // Company-seal signer
+  PERSONAL_SIGNATURE  // Personal signer
 }
 
 model SigningTask {
@@ -354,7 +404,7 @@ model SigningTask {
   title           String
   flowType        SigningFlowType @default(SEQUENTIAL)
 
-  // spec 3.3：两个独立状态机
+  // spec 3.3: two independent state machines
   approvalStatus  ApprovalStatus @default(DRAFT)
   signingStatus   SigningStatus  @default(NOT_STARTED)
 
@@ -384,19 +434,19 @@ model Signer {
   id                String       @id @default(cuid())
   taskId            String
   task              SigningTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  // 内部签署人（spec 6：HR/部门负责人/员工）
+  // Internal signer (spec 6: HR / department lead / employee)
   userId            String?
   user              User?        @relation(fields: [userId], references: [id])
-  // 外部签署人（spec 4：无账号访问）
+  // External signer (spec 4: no account)
   externalFullName  String?
   externalEmail     String?
   externalPhoneE164 String?
 
   signRole          SignerRole
-  order             Int          @default(1) // 顺序签的序号，从 1 开始
+  order             Int          @default(1) // Sequential order, starting at 1
   status            SignerStatus @default(PENDING)
 
-  // spec 4：外部签署令牌（只存哈希）
+  // spec 4: external signing token (hash only)
   signingTokens     SigningToken[]
 
   viewedAt          DateTime?
@@ -410,17 +460,20 @@ model Signer {
   @@map("signers")
 }
 
-// spec 4：SigningToken 只存哈希，不存明文；带过期时间、可撤销
+// spec 4: SigningToken stores hash only (not plaintext); expiring and revocable
+// shortCode is the public URL face (/s/{shortCode}); tokenHash = sha256(shortCode)
 model SigningToken {
   id               String   @id @default(cuid())
   signerId         String
   signer           Signer   @relation(fields: [signerId], references: [id], onDelete: Cascade)
-  // 只存哈希 sha256(plaintext)，不存明文
+  // Store sha256(plaintext) only, never plaintext
   tokenHash        String   @unique
+  // Public short link code (also the plaintext hashed into tokenHash for new tokens)
+  shortCode        String?  @unique
   expiresAt        DateTime
   revokedAt        DateTime?
   usedAt           DateTime?
-  // spec 4：全程记录 IP、UA
+  // spec 4: always record IP and UA
   issuedIp          String?
   issuedUserAgent   String?
 
@@ -430,13 +483,33 @@ model SigningToken {
   @@map("signing_tokens")
 }
 
-// ============ 审批流（spec 15：ApprovalFlow + ApprovalRecord）============
+// Invite / password-reset tokens (plaintext only in email once; DB stores hash)
+enum AuthCredentialPurpose {
+  INVITE
+  PASSWORD_RESET
+}
+
+model AuthCredentialToken {
+  id        String                @id @default(cuid())
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   AuthCredentialPurpose
+  tokenHash String                @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  @@index([userId, purpose])
+  @@map("auth_credential_tokens")
+}
+
+// ============ Approval flow (deprecated: prefer Signer APPROVER + ApprovalPolicy) ============
 
 model ApprovalFlow {
   id                  String       @id @default(cuid())
   taskId              String       @unique
   task                SigningTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  // 审批人 ID 列表（按顺序）；具体审批人也在 Signer 表中 signRole=APPROVER
+  // Ordered approver IDs; approvers also exist as Signer rows with signRole=APPROVER
   approverIds         String[]
   currentApproverIndex Int         @default(0)
   createdAt           DateTime     @default(now())
@@ -451,7 +524,7 @@ model ApprovalRecord {
   task       SigningTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   approverId String
   approver   User           @relation(fields: [approverId], references: [id])
-  // 动作：APPROVE / REJECT / WITHDRAW
+  // Actions: APPROVE / REJECT / WITHDRAW
   action     String
   fromStatus ApprovalStatus
   toStatus   ApprovalStatus
@@ -464,12 +537,12 @@ model ApprovalRecord {
   @@map("approval_records")
 }
 
-// ============ 签名记录（spec 0：Signature = 个人签署）============
+// ============ Signature records (spec 0: Signature = personal signing) ============
 
 enum SignatureMethod {
-  IMAGE_SEAL   // 阶段1：图片印章
-  HANDWRITE    // 阶段1：手写签名图片
-  // 阶段2 预留（仅枚举值，不在阶段1 实现）
+  IMAGE_SEAL   // Phase 1: image seal
+  HANDWRITE    // Phase 1: handwritten signature image
+  // Phase 2 reserved (enum only, not implemented in phase 1)
   PADES
   GM_SM2
 }
@@ -480,25 +553,25 @@ model Signature {
   task              SigningTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   signerId          String
   signer            Signer           @relation(fields: [signerId], references: [id])
-  // 操作人（外部签署人无账号）
+  // Actor (external signers have no account)
   operatorId        String?
   operator          User?            @relation("SignatureOperator", fields: [operatorId], references: [id])
 
   method            SignatureMethod
-  // 阶段1：签名图 storageKey；阶段2：签名数据
+  // Phase 1: signature image storageKey; phase 2: signature payload
   storageKey        String?
   sealId            String?
   seal              Seal?            @relation(fields: [sealId], references: [id])
 
-  // 填充到哪个模板域
+  // Target template field
   fieldId           String?
   field             TemplateField?   @relation(fields: [fieldId], references: [id])
 
-  // spec 3.2：每次盖章/签名产生新 DocumentVersion
+  // spec 3.2: each seal/sign creates a new DocumentVersion
   documentVersionId String?
   documentVersion   DocumentVersion? @relation(fields: [documentVersionId], references: [id])
 
-  // spec 2：SignatureProvider.verify 的结果（Json，由 zod 校验）
+  // spec 2: SignatureProvider.verify result (Json, validated by zod)
   verificationResult Json?
 
   ip                String?
@@ -510,30 +583,30 @@ model Signature {
   @@map("signatures")
 }
 
-// ============ 审计日志（spec 8：哈希链 + 只追加）============
-// 数据库层禁止 UPDATE/DELETE（由迁移 SQL 中触发器强制）
-// 哈希：hash = sha256(prevHash + 规范化 JSON(canonical_fields))
-// spec 20.8：存"动作码 + 参数"，不存本地化文本
+// ============ Audit log (spec 8: hash chain + append-only) ============
+// Database forbids UPDATE/DELETE (enforced by migration SQL triggers)
+// Hash: hash = sha256(prevHash + canonical JSON(canonical_fields))
+// spec 20.8: store "action code + params", never localized text
 
 model AuditLog {
   id              String   @id @default(cuid())
-  // 哈希链：上一条记录的 hash；首条为 null
+  // Hash chain: previous record hash; first record is null
   prevHash        String?
-  // 本条记录的 hash = sha256(prevHash + canonical_json)
+  // This record hash = sha256(prevHash + canonical_json)
   hash            String   @unique
   userId          String?
   user            User?    @relation(fields: [userId], references: [id])
-  // 动作码（如 "task.sign"、"template.publish"）
+  // Action code (e.g. "task.sign", "template.publish")
   action          String
   targetType      String
   targetId        String?
-  // 结果：success / failure
+  // Result: success / failure
   result          String   @default("success")
-  // spec 8：相关文档 sha256
+  // spec 8: related document sha256
   documentSha256  String?
   ip              String?
   userAgent       String?
-  // 动作参数（Json，由 zod schema 校验，不存本地化文本）
+  // Action params (Json, validated by zod; no localized text)
   detail          Json?
   createdAt       DateTime @default(now())
 
@@ -542,7 +615,7 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// ============ 数据保留（spec 9）============
+// ============ Data retention (spec 9) ============
 
 enum RetentionAction {
   SOFT_DELETE
@@ -554,16 +627,36 @@ model RetentionPolicy {
   id              String           @id @default(cuid())
   name            String
   category        TemplateCategory
-  // 保留年限
+  // Retention years
   retentionYears  Int
   action          RetentionAction  @default(SOFT_DELETE)
   enabled         Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  // 每个分类只有一条策略
+  // One policy per category
   @@unique([category])
   @@map("retention_policies")
+}
+
+model AppSettings {
+  id                String   @id @default("default")
+  watermarkText     String
+  /// IMAGE_SEAL | PADES | GM_SM2 — cryptographic method after visual stamp
+  signatureMethod   String   @default("IMAGE_SEAL")
+  /// Days before expiry to send reminder (0 = overdue only)
+  remindDaysBefore  Int      @default(3)
+  /// JSON string array: EMAIL, WECOM, DINGTALK, LARK
+  notifyChannels    String   @default("[\"EMAIL\"]")
+  /// Optional PEM certificate (PAdES demo); prefer env PADES_CERT_PEM
+  padesCertPem      String?
+  /// Optional PEM private key (PAdES demo); prefer env PADES_KEY_PEM
+  padesKeyPem       String?
+  /// Demo SM2 keypair JSON { publicKey, privateKey }
+  sm2KeyJson        String?
+  updatedAt         DateTime @updatedAt
+
+  @@map("app_settings")
 }
 
 // ============ API Key & Webhook（spec 10）============
@@ -571,13 +664,13 @@ model RetentionPolicy {
 model ApiKey {
   id                String    @id @default(cuid())
   name              String
-  // spec 12：只存哈希
+  // spec 12: store hashes only
   keyHash           String    @unique
-  // 用于识别（前 8 字符明文）
+  // For identification (first 8 chars plaintext)
   keyPrefix         String
   createdBy         String
   creator           User      @relation(fields: [createdBy], references: [id])
-  // 权限范围
+  // Permission scope
   scopes            String[]  @default([])
   rateLimitPerMinute Int?
   lastUsedAt        DateTime?
@@ -592,11 +685,11 @@ model Webhook {
   id          String             @id @default(cuid())
   name        String
   url         String
-  // HMAC 签名密钥（只存哈希）
+  // HMAC signing secret (hash only)
   secretHash  String
-  // 用于识别
+  // For identification
   secretPrefix String
-  // 订阅事件（如 task.created, approval.result, signing.completed）
+  // Subscribed events (e.g. task.created, approval.result, signing.completed)
   events      String[]           @default([])
   enabled     Boolean            @default(true)
   createdBy   String
@@ -622,9 +715,9 @@ model WebhookDelivery {
   taskId         String?
   task           SigningTask?         @relation(fields: [taskId], references: [id])
   event          String
-  // payload 由 zod schema 校验
+  // payload validated by zod
   payload        Json
-  // HMAC 签名（用于发送）
+  // HMAC signature (for delivery)
   signature      String
   responseStatus Int?
   responseError  String?
@@ -638,42 +731,45 @@ model WebhookDelivery {
   @@map("webhook_deliveries")
 }
 
-// ============ 通知（spec 2 Notifier / 20：模板按 locale 多份）============
+// ============ Notifications (spec 2 Notifier / 20: templates per locale) ============
 
 enum NotificationChannel {
-  EMAIL     // 阶段1 必实现
-  WECOM     // 企业微信（可选适配器）
-  DINGTALK  // 钉钉（可选适配器）
-  LARK      // 飞书（可选适配器）
+  EMAIL     // Required in phase 1
+  SMS       // Phase 2 OTP / invite
+  WECOM     // WeCom (optional adapter)
+  DINGTALK  // DingTalk (optional adapter)
+  LARK      // Lark / Feishu (optional adapter)
+  SLACK     // Slack Incoming Webhook
+  TEAMS     // Microsoft Teams Incoming Webhook
 }
 
 enum NotificationStatus {
   PENDING
   SENT
   FAILED
-  SKIPPED // 渠道未配置
+  SKIPPED // Channel not configured
 }
 
 model NotificationLog {
   id               String             @id @default(cuid())
   taskId           String?
   task             SigningTask?       @relation(fields: [taskId], references: [id])
-  // 接收人
+  // Recipient
   recipientUserId  String?
   recipientUser    User?              @relation("NotificationRecipient", fields: [recipientUserId], references: [id])
   recipientEmail   String?
   recipientPhone   String?
   channel          NotificationChannel @default(EMAIL)
-  // spec 20：模板按 locale 多份，这里只引用 key
+  // spec 20: templates exist per locale; this stores the key only
   templateKey      String
-  // 模板参数（Json，ICU MessageFormat 变量）
+  // Template params (Json, ICU MessageFormat variables)
   templateParams   Json?
-  // 实际发送内容（用于审计）
+  // Actual sent content (for audit)
   subject          String?
   body             String?
   status           NotificationStatus @default(PENDING)
   error            String?
-  // 重试信息
+  // Retry info
   attemptCount     Int                @default(0)
   sentAt           DateTime?
   createdAt        DateTime           @default(now())
@@ -682,7 +778,7 @@ model NotificationLog {
   @@map("notification_logs")
 }
 
-// spec 15/20：NotificationTemplate 按 locale 存多份
+// spec 15/20: NotificationTemplate stored per locale
 model NotificationTemplate {
   id            String             @id @default(cuid())
   key           String             // e.g. "signing.invitation", "approval.request"
@@ -695,18 +791,21 @@ model NotificationTemplate {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  // 每个 (key, channel, locale) 组合唯一
+  // Unique per (key, channel, locale)
   @@unique([key, channel, locale])
   @@map("notification_templates")
 }
 
-// ============ 身份验证（spec 2 IdentityVerifier / 4 邮箱验证码）============
+// ============ Identity verification (spec 2 IdentityVerifier / 4 email codes) ============
 
 enum IdentityVerificationType {
-  EMAIL_CODE  // 阶段1 实现
-  // 阶段2 预留（仅枚举值）
+  EMAIL_CODE  // Implemented in phase 1
+  SMS_OTP     // Phase 2
+  // Phase 2 reserved (enum only — plugins throw until wired)
   FACE
   REAL_NAME
+  KBA
+  ID_DOCUMENT
 }
 
 enum IdentityVerificationStatus {
@@ -719,14 +818,14 @@ enum IdentityVerificationStatus {
 model IdentityVerification {
   id                String                     @id @default(cuid())
   type              IdentityVerificationType   @default(EMAIL_CODE)
-  // 验证目标（邮箱、手机号等）
+  // Verification target (email, phone, etc.)
   target            String
-  // spec 4：验证码哈希（只存哈希）
+  // spec 4: verification-code hash only
   codeHash          String
-  // spec 4：次数限制和冷却
+  // spec 4: attempt limits and cooldown
   attemptCount      Int                        @default(0)
   maxAttempts       Int                        @default(5)
-  // 关联的签署令牌（外部签署人验证）
+  // Related signing token (external signer verification)
   signingTokenId    String?
   status            IdentityVerificationStatus @default(PENDING)
   verifiedAt        DateTime?
@@ -738,4 +837,371 @@ model IdentityVerification {
 
   @@index([target])
   @@map("identity_verifications")
+}
+
+// =================================================================
+// Envelope domain (DocuSign-parity) — coexists with SigningTask
+// =================================================================
+
+enum EnvelopeStatus {
+  created
+  sent
+  delivered
+  signed
+  completed
+  declined
+  voided
+  expired
+  corrected
+}
+
+enum RecipientType {
+  signer
+  cc
+  agent
+  editor
+  certifiedDelivery
+  inPersonSigner
+  notary
+  witness
+  carbonCopy
+  intermediary
+}
+
+enum EnvelopeRecipientStatus {
+  created
+  sent
+  delivered
+  signed
+  declined
+  completed
+  faxpending
+  autoresponded
+}
+
+enum TabType {
+  signHere
+  initialHere
+  dateSigned
+  text
+  fullName
+  emailAddress
+  checkbox
+  radioGroup
+  formula
+  attachment
+  payment
+  company
+  title
+  note
+}
+
+/// Multi-tenant account (Phase 4; default single account seeded).
+model Account {
+  id        String          @id @default(cuid())
+  name      String
+  slug      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  members   AccountMember[]
+  envelopes Envelope[]
+  brands    Brand[]
+
+  @@map("accounts")
+}
+
+model AccountMember {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("sender") // admin | sender | viewer
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, userId])
+  @@map("account_members")
+}
+
+model Brand {
+  id           String  @id @default(cuid())
+  accountId    String
+  account      Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  brandName    String
+  primaryColor String  @default("#1a1a1a")
+  logoKey      String?
+
+  @@map("brands")
+}
+
+model Envelope {
+  id           String         @id @default(cuid())
+  accountId    String?
+  account      Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  status       EnvelopeStatus @default(created)
+  subject      String
+  emailBlurb   String?
+  sentAt       DateTime?
+  completedAt  DateTime?
+  voidedAt     DateTime?
+  voidReason   String?
+  expiresAt    DateTime?
+  /// Bridge to legacy SigningTask during migration
+  legacyTaskId String?        @unique
+  createdBy    String
+  creator      User           @relation("EnvelopeCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  documents  EnvelopeDocument[]
+  recipients EnvelopeRecipient[]
+  comments   EnvelopeComment[]
+  events     EnvelopeEvent[]
+  tabs       EnvelopeTab[]
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([accountId])
+  @@map("envelopes")
+}
+
+model EnvelopeDocument {
+  id            String   @id @default(cuid())
+  envelopeId    String
+  envelope      Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  documentOrder Int      @default(1)
+  name          String
+  storageKey    String?
+  sha256        String?
+  pageCount     Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  tabs EnvelopeTab[]
+
+  @@index([envelopeId])
+  @@map("envelope_documents")
+}
+
+model EnvelopeRecipient {
+  id              String                  @id @default(cuid())
+  envelopeId      String
+  envelope        Envelope                @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  recipientType   RecipientType           @default(signer)
+  routingOrder    Int                     @default(1)
+  name            String
+  email           String
+  /// E.164 phone for SMS delivery / OTP (Phase 2)
+  phoneE164       String?
+  /// email | sms | both (default email)
+  deliveryChannel String                  @default("email")
+  /// none | email_otp | sms_otp | kba | id_document | face
+  idvMethod       String                  @default("none")
+  /// pending | verified | skipped
+  idvStatus       String                  @default("skipped")
+  /// For inPersonSigner: optional host user email / recipient id note
+  hostUserId      String?
+  /// For witness: the recipient being witnessed
+  witnessForId    String?
+  status          EnvelopeRecipientStatus @default(created)
+  userId          String?
+  accessTokenHash String?
+  signedAt        DateTime?
+  declinedAt      DateTime?
+  declineReason   String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  tabs EnvelopeTab[]
+
+  @@index([envelopeId])
+  @@index([email])
+  @@map("envelope_recipients")
+}
+
+model EnvelopeTab {
+  id                 String             @id @default(cuid())
+  envelopeId         String
+  envelope           Envelope           @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  envelopeDocumentId String?
+  document           EnvelopeDocument?  @relation(fields: [envelopeDocumentId], references: [id], onDelete: Cascade)
+  recipientId        String?
+  recipient          EnvelopeRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  tabType            TabType
+  /// { page, x, y, width, height, rotation }
+  coordinates        Json
+  required           Boolean            @default(true)
+  value              String?
+  /// Conditional show rules (zod later)
+  conditional        Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([envelopeId])
+  @@index([recipientId])
+  @@map("envelope_tabs")
+}
+
+model EnvelopeComment {
+  id         String   @id @default(cuid())
+  envelopeId String
+  envelope   Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation("EnvelopeCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  body       String
+  documentId String?
+  page       Int?
+  createdAt  DateTime @default(now())
+
+  @@index([envelopeId])
+  @@map("envelope_comments")
+}
+
+model EnvelopeEvent {
+  id         String   @id @default(cuid())
+  envelopeId String
+  envelope   Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  action     String
+  actorEmail String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([envelopeId])
+  @@map("envelope_events")
+}
+
+/// PowerForm stub table
+model PowerForm {
+  id         String   @id @default(cuid())
+  name       String
+  templateId String
+  urlSlug    String   @unique
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("power_forms")
+}
+
+/// Clickwrap agreement (Phase 3)
+model Clickwrap {
+  id            String               @id @default(cuid())
+  name          String
+  displayName   String?
+  status        String               @default("active") // active | inactive | draft
+  bodyHtml      String?
+  version       Int                  @default(1)
+  requireScroll Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  acceptances   ClickwrapAcceptance[]
+
+  @@map("clickwraps")
+}
+
+model ClickwrapAcceptance {
+  id           String    @id @default(cuid())
+  clickwrapId  String
+  clickwrap    Clickwrap @relation(fields: [clickwrapId], references: [id], onDelete: Cascade)
+  acceptorName String?
+  acceptorEmail String
+  ip           String?
+  userAgent    String?
+  documentHash String?
+  acceptedAt   DateTime  @default(now())
+
+  @@index([clickwrapId])
+  @@index([acceptorEmail])
+  @@map("clickwrap_acceptances")
+}
+
+/// Rooms (Phase 3 — transaction rooms)
+model Room {
+  id          String         @id @default(cuid())
+  name        String
+  status      String         @default("active") // active | closed
+  description String?
+  ownerId     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  members     RoomMember[]
+  documents   RoomDocument[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  role      String   @default("viewer") // owner | editor | viewer
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
+  @@map("room_members")
+}
+
+model RoomDocument {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  name       String
+  storageKey String?
+  envelopeId String?
+  createdAt  DateTime @default(now())
+
+  @@index([roomId])
+  @@map("room_documents")
+}
+
+/// CLM agreement (Phase 3)
+model ClmAgreement {
+  id           String    @id @default(cuid())
+  name         String
+  status       String    @default("draft") // draft | in_review | active | expired | terminated
+  counterparty String?
+  envelopeId   String?
+  effectiveOn  DateTime?
+  expiresOn    DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("clm_agreements")
+}
+
+/// Notary transaction (Phase 3)
+model NotaryTransaction {
+  id           String    @id @default(cuid())
+  status       String    @default("created") // created | scheduled | in_session | completed | cancelled
+  envelopeId   String?
+  notaryName   String?
+  jurisdiction String?
+  scheduledAt  DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("notary_transactions")
+}
+
+/// Bulk send batch (DocuSign BulkSend)
+model BulkSendBatch {
+  id         String   @id @default(cuid())
+  templateId String
+  status     String   @default("queued") // queued | processing | completed | failed
+  total      Int      @default(0)
+  succeeded  Int      @default(0)
+  failed     Int      @default(0)
+  createdBy  String
+  /// [{ email, name, envelopeId?, error? }]
+  results    Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([createdBy])
+  @@map("bulk_send_batches")
 }

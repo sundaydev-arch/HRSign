@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" fill="none">
+  <!-- Icon (centered, 128px) — ink mark matching BrandLogo -->
+  <rect x="86" y="0" width="128" height="128" rx="28" fill="#1C1917"/>
+  <path d="M130 26 L170 26 L182 38 L182 102 L130 102 Z" fill="#FAF7F2"/>
+  <path d="M170 26 L170 38 L182 38 Z" fill="#E8E0D4"/>
+  <path d="M138 84 C140 74 148 71 154 77 C160 83 166 71 172 60"
+        stroke="#9A5346" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="160" cy="93" r="7" fill="none" stroke="#9A5346" stroke-width="2.5"/>
+  <path d="M156.5 93 L159 95.5 L163.5 91" stroke="#9A5346" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Wordmark: centered -->
+  <text x="150" y="190" text-anchor="middle"
+        font-family="'Geist Sans', -apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="40" font-weight="700" letter-spacing="-1">
+    <tspan fill="#1C1917">HR</tspan><tspan fill="#1C1917">Sign</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="150" y="220" text-anchor="middle"
+        font-family="'Geist Sans', -apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="14" font-weight="400" fill="#78716C">
+    HR e-Sign &amp; Sealing
+  </text>
+</svg>
