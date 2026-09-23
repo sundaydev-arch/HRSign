@@ -1,7 +1,8 @@
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { assertEnvelopeAccess, requireV1Hr } from "@/lib/v1-authz";
 import { buildEvidencePack } from "@/lib/evidence-pack";
 import { NextResponse, type NextRequest } from "next/server";
+import { getEnvelopeOrThrow } from "@/lib/envelopes";
 
 export const runtime = "nodejs";
 
@@ -10,8 +11,10 @@ export async function GET(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
+    const envAccess = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, envAccess);
     const pack = await buildEvidencePack(envelopeId);
     const download = req.nextUrl.searchParams.get("download") === "1";
     if (download) {

@@ -71,6 +71,15 @@
     animation: skeleton-shimmer 1.4s ease-in-out infinite;
   }
 
+  /* Shared focus rings — buttons use stronger ring; inputs use subtle. */
+  .focus-control {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  .focus-control-subtle {
+    @apply focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .page-enter,
     .drawer-enter,
@@ -92,6 +101,14 @@
     .pressable:active:not(:disabled),
     .nav-item-motion:hover {
       transform: none !important;
+    }
+
+    html {
+      scroll-behavior: auto !important;
+    }
+
+    [class*="animate-"] {
+      animation: none !important;
     }
   }
 }

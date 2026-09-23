@@ -65,8 +65,8 @@ export { SmsOtpVerifier, SmsOtpCooldownError } from "./identity/sms-otp";
 export { EmailNotifier, renderIcu, sendEmail } from "./notify/email";
 export type { EmailNotifierDeps, SendEmailInput } from "./notify/email";
 
-import { sendWecomMessage } from "./notify/wecom";
 export type { WecomMessage } from "./notify/wecom";
+export { sendWecomMessage } from "./notify/wecom";
 export { sendDingtalkMessage } from "./notify/dingtalk";
 export { sendLarkMessage } from "./notify/lark";
 export { sendSlackMessage } from "./notify/slack";

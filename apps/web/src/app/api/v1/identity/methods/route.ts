@@ -1,13 +1,13 @@
 import { IDV_METHODS } from "@/lib/envelopes";
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     return NextResponse.json({
       methods: [...IDV_METHODS],
       plugins: [

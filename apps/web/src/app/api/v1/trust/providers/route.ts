@@ -1,5 +1,5 @@
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 /** Catalog of SignatureProvider / CA adapters available in this build. */
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const padesConfigured = Boolean(
       process.env.PADES_CERT_PEM || process.env.PADES_CERT_PATH,
     );

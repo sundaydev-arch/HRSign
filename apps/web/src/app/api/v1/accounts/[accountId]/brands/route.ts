@@ -1,5 +1,6 @@
 import { ApiError, handleApiError } from "@/lib/api";
 import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { createBrand, getAccountOrThrow } from "@/lib/accounts";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
@@ -11,7 +12,7 @@ export async function GET(
   ctx: { params: Promise<{ accountId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const { accountId } = await ctx.params;
     await getAccountOrThrow(accountId);
     const brands = await prisma.brand.findMany({ where: { accountId } });

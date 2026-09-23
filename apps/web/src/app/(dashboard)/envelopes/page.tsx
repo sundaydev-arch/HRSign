@@ -2,8 +2,9 @@
 
 import { EmptyState } from "@/components/layout/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { PageStack } from "@/components/layout/PageStack";
+import { CreatePanel, ListPanel } from "@/components/layout/ResourcePanels";
 import { TableRowsSkeleton } from "@/components/layout/skeletons";
-import { Surface } from "@/components/layout/Surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
+import { api } from "@/lib/client";
 import { useApiError } from "@/lib/use-api-error";
 import { FileStack, Plus, Send, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -52,6 +53,16 @@ type RecDraft = {
   routingOrder: number;
 };
 
+const EMPTY_RECIPIENT: RecDraft = {
+  name: "",
+  email: "",
+  phoneE164: "",
+  recipientType: "signer",
+  deliveryChannel: "email",
+  idvMethod: "none",
+  routingOrder: 1,
+};
+
 export default function EnvelopesPage() {
   const t = useTranslations("envelopes");
   const tc = useTranslations("common");
@@ -60,19 +71,13 @@ export default function EnvelopesPage() {
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState("");
   const [emailBlurb, setEmailBlurb] = useState("");
-  const [docs, setDocs] = useState<DocDraft[]>([{ name: "Document 1.pdf" }]);
-  const [recipients, setRecipients] = useState<RecDraft[]>([
-    {
-      name: "",
-      email: "",
-      phoneE164: "",
-      recipientType: "signer",
-      deliveryChannel: "email",
-      idvMethod: "none",
-      routingOrder: 1,
-    },
-  ]);
+  const [docs, setDocs] = useState<DocDraft[]>([{ name: "" }]);
+  const [recipients, setRecipients] = useState<RecDraft[]>([{ ...EMPTY_RECIPIENT }]);
   const [creating, setCreating] = useState(false);
+
+  function docName(n: number) {
+    return t("defaultDocName", { n });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,9 +107,11 @@ export default function EnvelopesPage() {
         body: JSON.stringify({
           subject: subject.trim(),
           emailBlurb: emailBlurb.trim() || undefined,
-          documents: docs
-            .filter((d) => d.name.trim())
-            .map((d, i) => ({ name: d.name.trim(), documentOrder: i + 1, blank: true })),
+          documents: docs.map((d, i) => ({
+            name: d.name.trim() || docName(i + 1),
+            documentOrder: i + 1,
+            blank: true,
+          })),
           recipients: recipients
             .filter((r) => r.email.trim())
             .map((r, i) => ({
@@ -122,18 +129,8 @@ export default function EnvelopesPage() {
       toast.success(t("sentToast"));
       setSubject("");
       setEmailBlurb("");
-      setDocs([{ name: "Document 1.pdf" }]);
-      setRecipients([
-        {
-          name: "",
-          email: "",
-          phoneE164: "",
-          recipientType: "signer",
-          deliveryChannel: "email",
-          idvMethod: "none",
-          routingOrder: 1,
-        },
-      ]);
+      setDocs([{ name: "" }]);
+      setRecipients([{ ...EMPTY_RECIPIENT }]);
       await load();
     } catch (err) {
       toast.error(apiError(err));
@@ -143,22 +140,33 @@ export default function EnvelopesPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <PageStack>
       <PageHeader title={t("title")} description={t("subtitle")} />
 
-      <Surface className="space-y-4 p-4 sm:p-5">
-        <h2 className="text-sm font-semibold">{t("quickCreate")}</h2>
+      <CreatePanel
+        title={t("quickCreate")}
+        hint={t("createHint")}
+        actions={
+          <Button loading={creating} onClick={() => void createAndSend()}>
+            <Send className="mr-1 h-4 w-4" />
+            {t("createSend")}
+          </Button>
+        }
+      >
         <div className="space-y-1.5">
-          <Label>{t("subject")}</Label>
+          <Label htmlFor="env-subject">{t("subject")}</Label>
           <Input
+            id="env-subject"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder={t("subjectPlaceholder")}
+            autoComplete="off"
           />
         </div>
         <div className="space-y-1.5">
-          <Label>{t("emailBlurb")}</Label>
+          <Label htmlFor="env-blurb">{t("emailBlurb")}</Label>
           <Input
+            id="env-blurb"
             value={emailBlurb}
             onChange={(e) => setEmailBlurb(e.target.value)}
             placeholder={t("emailBlurbPlaceholder")}
@@ -172,7 +180,7 @@ export default function EnvelopesPage() {
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => setDocs((d) => [...d, { name: `Document ${d.length + 1}.pdf` }])}
+              onClick={() => setDocs((d) => [...d, { name: "" }])}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               {t("addDoc")}
@@ -185,12 +193,15 @@ export default function EnvelopesPage() {
                 onChange={(e) =>
                   setDocs((prev) => prev.map((x, j) => (j === i ? { name: e.target.value } : x)))
                 }
+                placeholder={docName(i + 1)}
+                aria-label={docName(i + 1)}
               />
               {docs.length > 1 ? (
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
+                  aria-label={t("removeDoc")}
                   onClick={() => setDocs((prev) => prev.filter((_, j) => j !== i))}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -210,15 +221,7 @@ export default function EnvelopesPage() {
               onClick={() =>
                 setRecipients((r) => [
                   ...r,
-                  {
-                    name: "",
-                    email: "",
-                    phoneE164: "",
-                    recipientType: "signer",
-                    deliveryChannel: "email",
-                    idvMethod: "none",
-                    routingOrder: r.length + 1,
-                  },
+                  { ...EMPTY_RECIPIENT, routingOrder: r.length + 1 },
                 ])
               }
             >
@@ -227,32 +230,47 @@ export default function EnvelopesPage() {
             </Button>
           </div>
           {recipients.map((r, i) => (
-            <div key={i} className="space-y-2 rounded-md border border-border/60 p-3">
+            <div key={i} className="space-y-2 rounded-md bg-muted/35 p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_1.2fr_auto]">
-                <Input
-                  placeholder={t("signerName")}
-                  value={r.name}
-                  onChange={(e) =>
-                    setRecipients((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Input
-                  type="email"
-                  placeholder={t("signerEmail")}
-                  value={r.email}
-                  onChange={(e) =>
-                    setRecipients((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)),
-                    )
-                  }
-                />
+                <div className="space-y-1.5">
+                  <Label htmlFor={`env-rec-name-${i}`} className="sr-only sm:not-sr-only sm:text-xs">
+                    {t("signerName")}
+                  </Label>
+                  <Input
+                    id={`env-rec-name-${i}`}
+                    placeholder={t("signerName")}
+                    value={r.name}
+                    onChange={(e) =>
+                      setRecipients((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
+                      )
+                    }
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`env-rec-email-${i}`} className="sr-only sm:not-sr-only sm:text-xs">
+                    {t("signerEmail")}
+                  </Label>
+                  <Input
+                    id={`env-rec-email-${i}`}
+                    type="email"
+                    placeholder={t("signerEmail")}
+                    value={r.email}
+                    onChange={(e) =>
+                      setRecipients((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)),
+                      )
+                    }
+                    autoComplete="email"
+                  />
+                </div>
                 {recipients.length > 1 ? (
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
+                    aria-label={t("removeRecipient")}
                     onClick={() => setRecipients((prev) => prev.filter((_, j) => j !== i))}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -262,15 +280,22 @@ export default function EnvelopesPage() {
                 )}
               </div>
               <div className="grid gap-2 sm:grid-cols-4">
-                <Input
-                  placeholder={t("phone")}
-                  value={r.phoneE164}
-                  onChange={(e) =>
-                    setRecipients((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, phoneE164: e.target.value } : x)),
-                    )
-                  }
-                />
+                <div className="space-y-1.5">
+                  <Label htmlFor={`env-rec-phone-${i}`} className="sr-only sm:not-sr-only sm:text-xs">
+                    {t("phone")}
+                  </Label>
+                  <Input
+                    id={`env-rec-phone-${i}`}
+                    placeholder={t("phone")}
+                    value={r.phoneE164}
+                    onChange={(e) =>
+                      setRecipients((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, phoneE164: e.target.value } : x)),
+                      )
+                    }
+                    inputMode="tel"
+                  />
+                </div>
                 <Select
                   value={r.recipientType}
                   onValueChange={(v) =>
@@ -283,7 +308,7 @@ export default function EnvelopesPage() {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("typeSigner")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -305,8 +330,8 @@ export default function EnvelopesPage() {
                     )
                   }
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("delivery")} />
+                  <SelectTrigger aria-label={t("delivery")}>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="email">{t("deliveryEmail")}</SelectItem>
@@ -324,8 +349,8 @@ export default function EnvelopesPage() {
                     )
                   }
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("idv")} />
+                  <SelectTrigger aria-label={t("idv")}>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t("idvNone")}</SelectItem>
@@ -337,14 +362,9 @@ export default function EnvelopesPage() {
             </div>
           ))}
         </div>
+      </CreatePanel>
 
-        <Button loading={creating} onClick={() => void createAndSend()}>
-          <Send className="mr-1 h-4 w-4" />
-          {t("createSend")}
-        </Button>
-      </Surface>
-
-      <Surface>
+      <ListPanel title={t("listTitle")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -361,11 +381,7 @@ export default function EnvelopesPage() {
             ) : rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={5} className="p-0">
-                  <EmptyState
-                    icon={FileStack}
-                    title={t("empty")}
-                    description={t("emptyHint")}
-                  />
+                  <EmptyState icon={FileStack} title={t("empty")} description={t("emptyHint")} />
                 </TableCell>
               </TableRow>
             ) : (
@@ -387,7 +403,7 @@ export default function EnvelopesPage() {
             )}
           </TableBody>
         </Table>
-      </Surface>
-    </div>
+      </ListPanel>
+    </PageStack>
   );
 }

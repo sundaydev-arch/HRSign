@@ -1,5 +1,5 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { toClmDto } from "@/lib/platform-products";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const rows = await prisma.clmAgreement.findMany({ orderBy: { updatedAt: "desc" } });
     return NextResponse.json({ agreements: rows.map((r) => toClmDto(r)) });
   } catch (err) {
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const body = (await req.json()) as {
       name?: string;
       counterparty?: string;

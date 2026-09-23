@@ -24,7 +24,7 @@ export interface PresetFieldDef {
   fontSize?: number;
 }
 
-const COMPANY = "示例科技（上海）有限公司";
+const COMPANY = "云启信息科技（上海）有限公司";
 const MARGIN = 52;
 const ink = rgb(0.12, 0.12, 0.14);
 const muted = rgb(0.42, 0.4, 0.38);
@@ -66,7 +66,7 @@ function text(
 
 function header(page: PDFPage, font: PDFFont, bold: PDFFont, title: string, subtitle: string) {
   text(page, font, COMPANY, 46, { size: 10, color: muted });
-  text(page, font, "地址：上海市浦东新区世纪大道 1 号 · 电话：021-5888-0000", 62, {
+  text(page, font, "地址：上海市浦东新区张江路 88 号云启大厦 12 层 · 电话：021-5888-0168", 62, {
     size: 8,
     color: muted,
   });
@@ -120,14 +120,14 @@ async function withFonts() {
 async function buildContractPdf(): Promise<Buffer> {
   const { doc, font, bold } = await withFonts();
   const page1 = doc.addPage([A4.width, A4.height]);
-  header(page1, font, bold, "劳动合同", "编号：HR-LC-2026-DEMO · 示范文本（仅供系统演示）");
+  header(page1, font, bold, "劳动合同", "编号：HR-LC-2026-0418 · 人力资源部制");
 
   let y = 160;
   text(page1, bold, "第一条  合同双方", y, { size: 12 });
   y += 26;
   text(page1, font, "甲方（用人单位）：" + COMPANY, y);
   y += 20;
-  text(page1, font, "法定代表人：王明远　　统一社会信用代码：91310000MA1KDEMO9X", y, { size: 10 });
+  text(page1, font, "法定代表人：王明远　　统一社会信用代码：91310115MA1K8F2R3X", y, { size: 10 });
   y += 22;
   text(page1, font, "乙方（劳动者）：____________________　　身份证号：____________________", y);
   y += 22;
@@ -360,7 +360,7 @@ async function buildCertificatePdf(): Promise<Buffer> {
     "该员工遵守公司规章制度，工作表现良好。本证明应本人申请开具，仅供办理签证、贷款、子女入学等合理用途，不作为收入担保或法律承诺。",
     y,
   );
-  y = paragraph(page, font, "如需核实，请联系人力资源部：hr@demo.hrsign.local / 021-5888-0000。", y);
+  y = paragraph(page, font, "如需核实，请联系人力资源部：hr@yunqi-tech.cn / 021-5888-0168。", y);
 
   y += 36;
   text(page, font, COMPANY, y);
@@ -386,6 +386,12 @@ export async function createPresetPdf(
 ): Promise<Buffer> {
   if (locale === "en") return createEnglishPresetPdf(kind);
   return BUILDERS[kind]();
+}
+
+/** Page count helper so prisma seed need not resolve pdf-lib from the monorepo root. */
+export async function pdfPageCount(buffer: Buffer): Promise<number> {
+  const pdf = await PDFDocument.load(buffer);
+  return pdf.getPageCount();
 }
 
 /**

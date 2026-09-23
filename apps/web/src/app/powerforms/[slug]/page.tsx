@@ -1,20 +1,22 @@
 "use client";
 
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PublicPageShell } from "@/components/layout/PublicPageShell";
 import { Surface } from "@/components/layout/Surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiClientError } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
+import { ApiClientError } from "@/lib/client";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
 /**
  * Public PowerForm entry — collects signer info and starts an envelope from the bound template.
- * Token-free demo path; production would rate-limit + CAPTCHA.
+ * Token-free demo path; production would add CAPTCHA in front of the rate-limited API.
  */
 export default function PublicPowerFormPage() {
+  const t = useTranslations("powerformPublic");
   const params = useParams<{ slug: string }>();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,7 +26,7 @@ export default function PublicPowerFormPage() {
 
   async function start() {
     if (!name.trim() || !email.trim()) {
-      setError("Name and email are required");
+      setError(t("required"));
       return;
     }
     setBusy(true);
@@ -47,35 +49,50 @@ export default function PublicPowerFormPage() {
 
   if (signUrl) {
     return (
-      <main className="mx-auto flex min-h-svh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
-        <BrandLogo className="h-8" />
-        <p className="text-sm text-muted-foreground">Your envelope is ready.</p>
-        <Button asChild>
-          <a href={signUrl}>Continue to sign</a>
-        </Button>
-      </main>
+      <PublicPageShell>
+        <div className="flex flex-col items-center gap-4 py-12 text-center">
+          <p className="text-sm text-muted-foreground">{t("ready")}</p>
+          <Button asChild>
+            <a href={signUrl}>{t("continue")}</a>
+          </Button>
+        </div>
+      </PublicPageShell>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-4 p-6">
-      <BrandLogo className="h-8" />
-      <Surface className="space-y-3 p-4">
-        <h1 className="text-base font-semibold">PowerForm</h1>
-        <p className="text-xs text-muted-foreground">/{params.slug}</p>
-        <div className="space-y-1.5">
-          <Label>Full name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+    <PublicPageShell>
+      <Surface className="space-y-4 p-4 sm:p-5">
+        <div className="space-y-1">
+          <h1 className="text-base font-semibold tracking-tight">{t("title")}</h1>
+          <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="space-y-1.5">
-          <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Label htmlFor="pf-public-name">{t("name")}</Label>
+          <Input
+            id="pf-public-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("namePlaceholder")}
+            autoComplete="name"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pf-public-email">{t("email")}</Label>
+          <Input
+            id="pf-public-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t("emailPlaceholder")}
+            autoComplete="email"
+          />
         </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button className="w-full" loading={busy} onClick={() => void start()}>
-          Start signing
+          {t("start")}
         </Button>
       </Surface>
-    </main>
+    </PublicPageShell>
   );
 }

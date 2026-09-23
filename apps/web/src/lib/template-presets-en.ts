@@ -16,7 +16,7 @@ export interface PresetFieldDef {
   fontSize?: number;
 }
 
-const COMPANY = "Acme Tech (Shanghai) Co., Ltd.";
+const COMPANY = "Yunqi Information Technology (Shanghai) Co., Ltd.";
 const MARGIN = 52;
 const ink = rgb(0.12, 0.12, 0.14);
 const muted = rgb(0.42, 0.4, 0.38);
@@ -57,7 +57,7 @@ function text(
 
 function header(page: PDFPage, font: PDFFont, bold: PDFFont, title: string, subtitle: string) {
   text(page, font, COMPANY, 46, { size: 10, color: muted });
-  text(page, font, "1 Century Avenue, Pudong, Shanghai · Tel: +86 21-5888-0000", 62, {
+  text(page, font, "88 Zhangjiang Rd, Pudong, Shanghai · Tel: +86 21-5888-0168", 62, {
     size: 8,
     color: muted,
   });
@@ -111,14 +111,14 @@ async function withFonts() {
 async function buildContractPdf(): Promise<Buffer> {
   const { doc, font, bold } = await withFonts();
   const page1 = doc.addPage([A4.width, A4.height]);
-  header(page1, font, bold, "Employment Contract", "Ref: HR-LC-2026-DEMO · Sample for system demo only");
+  header(page1, font, bold, "Employment Contract", "Ref: HR-LC-2026-0418 · Prepared by Human Resources");
 
   let y = 160;
   text(page1, bold, "1. Parties", y, { size: 12 });
   y += 26;
   text(page1, font, "Employer (Party A): " + COMPANY, y);
   y += 20;
-  text(page1, font, "Legal representative: Wang Mingyuan    USCC: 91310000MA1KDEMO9X", y, { size: 10 });
+  text(page1, font, "Legal representative: Wang Mingyuan    USCC: 91310115MA1K8F2R3X", y, { size: 10 });
   y += 22;
   text(page1, font, "Employee (Party B): ____________________    ID / Passport: ____________________", y);
   y += 22;
@@ -351,7 +351,7 @@ async function buildCertificatePdf(): Promise<Buffer> {
     "This letter is issued at the employee's request for visa, loan, school enrollment, or similar purposes and is not a guarantee of income or a legal commitment.",
     y,
   );
-  y = paragraph(page, font, "Verification: hr@demo.hrsign.local / +86 21-5888-0000.", y);
+  y = paragraph(page, font, "Verification: hr@yunqi-tech.cn / +86 21-5888-0168.", y);
 
   y += 36;
   text(page, font, COMPANY, y);

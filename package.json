@@ -18,7 +18,7 @@
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:reset": "prisma migrate reset --force --schema prisma/schema.prisma",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "env -u DATABASE_URL NODE_PATH=./apps/web/node_modules node --env-file=.env ./node_modules/tsx/dist/cli.mjs --tsconfig apps/web/tsconfig.json prisma/seed.ts",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "worker": "tsx apps/web/src/server/jobs/worker.ts",
     "audit:verify": "node scripts/audit-verify.mjs",

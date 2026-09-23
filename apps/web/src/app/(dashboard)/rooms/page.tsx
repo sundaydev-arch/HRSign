@@ -1,9 +1,10 @@
 "use client";
 
 import { EmptyState } from "@/components/layout/EmptyState";
+import { PageStack } from "@/components/layout/PageStack";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { CreatePanel, ListPanel } from "@/components/layout/ResourcePanels";
 import { TableRowsSkeleton } from "@/components/layout/skeletons";
-import { Surface } from "@/components/layout/Surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
+import { api } from "@/lib/client";
 import { useApiError } from "@/lib/use-api-error";
 import { DoorOpen, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -89,35 +90,52 @@ export default function RoomsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <PageStack>
       <PageHeader title={t("title")} description={t("subtitle")} />
-      <Surface className="space-y-3 p-4 sm:p-5">
-        <h2 className="text-sm font-semibold">{t("create")}</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <CreatePanel
+        title={t("create")}
+        hint={t("createHint")}
+        actions={
+          <Button loading={creating} onClick={() => void create()}>
+            <Plus className="mr-1 h-4 w-4" />
+            {t("create")}
+          </Button>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>{t("name")}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="room-name">{t("name")}</Label>
+            <Input
+              id="room-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("namePlaceholder")}
+              autoComplete="off"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("memberEmail")}</Label>
+            <Label htmlFor="room-member">{t("memberEmail")}</Label>
             <Input
+              id="room-member"
               type="email"
               value={memberEmail}
               onChange={(e) => setMemberEmail(e.target.value)}
-              placeholder="optional"
+              placeholder={t("memberEmailPlaceholder")}
+              autoComplete="email"
             />
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label>{t("description")}</Label>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Label htmlFor="room-desc">{t("description")}</Label>
+          <Input
+            id="room-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t("descriptionPlaceholder")}
+          />
         </div>
-        <Button loading={creating} onClick={() => void create()}>
-          <Plus className="mr-1 h-4 w-4" />
-          {t("create")}
-        </Button>
-      </Surface>
-      <Surface>
+      </CreatePanel>
+      <ListPanel title={t("listTitle")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -150,7 +168,7 @@ export default function RoomsPage() {
             )}
           </TableBody>
         </Table>
-      </Surface>
-    </div>
+      </ListPanel>
+    </PageStack>
   );
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { TemplateCategory } from "@prisma/client";
-import { ApiError, handleApiError } from "@/lib/api";
+import { handleApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/rbac";
 

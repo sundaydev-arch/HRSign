@@ -1,5 +1,5 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { toNotaryDto } from "@/lib/platform-products";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
@@ -11,7 +11,7 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const { id } = await ctx.params;
     const body = (await req.json()) as { status?: string; notes?: string };
     const existing = await prisma.notaryTransaction.findUnique({ where: { id } });

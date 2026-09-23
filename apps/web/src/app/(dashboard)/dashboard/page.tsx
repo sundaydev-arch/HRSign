@@ -18,6 +18,7 @@ import {
   ArrowRight,
   CheckCircle2,
   CheckCircle,
+  ChevronRight,
   Clock,
   FileSignature,
   FileText,
@@ -308,8 +309,11 @@ export default function DashboardPage() {
               <h2 className="text-sm font-semibold tracking-tight">{t("attentionTitle")}</h2>
               <p className="text-xs text-muted-foreground">{t("attentionHint")}</p>
             </div>
-            <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
-              <Link href="/tasks">{t("viewAll")}</Link>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1 text-xs">
+              <Link href="/tasks">
+                {t("viewAll")}
+                <ChevronRight className="h-3.5 w-3.5 opacity-70" aria-hidden />
+              </Link>
             </Button>
           </div>
           <TaskMiniList
@@ -329,8 +333,11 @@ export default function DashboardPage() {
               <h2 className="text-sm font-semibold tracking-tight">{t("recentTitle")}</h2>
               <p className="text-xs text-muted-foreground">{t("recentHint")}</p>
             </div>
-            <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
-              <Link href="/tasks?tab=all">{t("viewAll")}</Link>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1 text-xs">
+              <Link href="/tasks?tab=all">
+                {t("viewAll")}
+                <ChevronRight className="h-3.5 w-3.5 opacity-70" aria-hidden />
+              </Link>
             </Button>
           </div>
           <TaskMiniList

@@ -1,6 +1,6 @@
 "use client";
 
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PublicPageShell } from "@/components/layout/PublicPageShell";
 import { Surface } from "@/components/layout/Surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/client";
 import { Check, FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -40,6 +41,7 @@ type ViewPayload = {
 };
 
 function HostedSignInner() {
+  const t = useTranslations("hostedSign");
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const envelopeId = params.id;
@@ -86,13 +88,13 @@ function HostedSignInner() {
 
   const textTabs = useMemo(
     () =>
-      (data?.tabs ?? []).filter((t) =>
-        ["text", "fullName", "emailAddress", "company", "title", "note"].includes(t.tabType),
+      (data?.tabs ?? []).filter((tab) =>
+        ["text", "fullName", "emailAddress", "company", "title", "note"].includes(tab.tabType),
       ),
     [data],
   );
   const signTabs = useMemo(
-    () => (data?.tabs ?? []).filter((t) => ["signHere", "initialHere"].includes(t.tabType)),
+    () => (data?.tabs ?? []).filter((tab) => ["signHere", "initialHere"].includes(tab.tabType)),
     [data],
   );
 
@@ -185,96 +187,100 @@ function HostedSignInner() {
 
   if (error && !data) {
     return (
-      <main className="mx-auto flex min-h-svh max-w-lg flex-col items-center justify-center gap-3 p-6 text-center">
-        <BrandLogo className="h-8" />
-        <p className="text-sm text-destructive">{error}</p>
-      </main>
+      <PublicPageShell>
+        <p className="py-12 text-center text-sm text-destructive">
+          {error === "SIGN_LINK_INVALID" ? t("invalidLink") : error}
+        </p>
+      </PublicPageShell>
     );
   }
 
   if (!data) {
     return (
-      <main className="mx-auto flex min-h-svh max-w-lg items-center justify-center p-6 text-sm text-muted-foreground">
-        Loading…
-      </main>
+      <PublicPageShell>
+        <p className="py-12 text-center text-sm text-muted-foreground">{t("loading")}</p>
+      </PublicPageShell>
     );
   }
 
   if (done || data.recipient?.status === "signed" || data.recipient?.status === "completed") {
     return (
-      <main className="mx-auto flex min-h-svh max-w-lg flex-col items-center justify-center gap-3 p-6 text-center">
-        <BrandLogo className="h-8" />
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Check className="h-6 w-6" />
+      <PublicPageShell>
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Check className="h-6 w-6" />
+          </div>
+          <h1 className="text-lg font-semibold">{t("thankYou")}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t("recorded", { subject: data.envelope.subject })}
+          </p>
         </div>
-        <h1 className="text-lg font-semibold">Thank you</h1>
-        <p className="text-sm text-muted-foreground">
-          {data.envelope.subject} — your action was recorded.
-        </p>
-      </main>
+      </PublicPageShell>
     );
   }
 
   if (!idvVerified) {
     return (
-      <main className="mx-auto min-h-svh max-w-lg space-y-4 p-4 py-8 sm:p-6">
-        <BrandLogo className="h-7" />
+      <PublicPageShell>
         <Surface className="space-y-3 p-4">
-          <h1 className="text-base font-semibold">Verify your identity</h1>
+          <h1 className="text-base font-semibold">{t("verifyTitle")}</h1>
           <p className="text-sm text-muted-foreground">
-            Method: {data.recipient?.idvMethod}
+            {t("verifyMethod", { method: data.recipient?.idvMethod ?? "—" })}
             {targetHint ? ` → ${targetHint}` : ""}
           </p>
           {!verificationId ? (
             <Button loading={busy} onClick={() => void startIdv()}>
-              Send code
+              {t("sendCode")}
             </Button>
           ) : (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Verification code</Label>
+                <Label htmlFor="hosted-otp">{t("codeLabel")}</Label>
                 <Input
+                  id="hosted-otp"
                   inputMode="numeric"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
-                  placeholder="6-digit code"
+                  placeholder={t("codePlaceholder")}
+                  autoComplete="one-time-code"
                 />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" loading={busy} onClick={() => void startIdv()}>
-                  Resend
+                  {t("resend")}
                 </Button>
                 <Button className="flex-1" loading={busy} onClick={() => void verifyIdv()}>
-                  Continue
+                  {t("continue")}
                 </Button>
               </div>
             </div>
           )}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </Surface>
-      </main>
+      </PublicPageShell>
     );
   }
 
-  return (
-    <main className="mx-auto min-h-svh max-w-lg space-y-4 p-4 py-8 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <BrandLogo className="h-7" />
-        <Badge variant="outline">{data.recipient?.recipientType}</Badge>
-      </div>
+  const roleSuffix =
+    data.recipient?.recipientType === "inPersonSigner"
+      ? t("inPerson")
+      : data.recipient?.recipientType === "witness"
+        ? t("witness")
+        : "";
 
+  return (
+    <PublicPageShell badge={<Badge variant="outline">{data.recipient?.recipientType}</Badge>}>
       <Surface className="space-y-3 p-4">
         <h1 className="text-base font-semibold tracking-tight">{data.envelope.subject}</h1>
         {data.envelope.emailBlurb ? (
           <p className="text-sm text-muted-foreground">{data.envelope.emailBlurb}</p>
         ) : null}
         <p className="text-xs text-muted-foreground">
-          Signing as {data.recipient?.name} ({data.recipient?.email})
-          {data.recipient?.recipientType === "inPersonSigner"
-            ? " · in-person session"
-            : data.recipient?.recipientType === "witness"
-              ? " · witness"
-              : ""}
+          {t("signingAs", {
+            name: data.recipient?.name ?? "—",
+            email: data.recipient?.email ?? "—",
+          })}
+          {roleSuffix}
         </p>
         <ul className="space-y-1 text-sm">
           {data.envelope.documents.map((d) => (
@@ -288,14 +294,15 @@ function HostedSignInner() {
 
       {textTabs.length > 0 ? (
         <Surface className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold">Fields</h2>
+          <h2 className="text-sm font-semibold">{t("fields")}</h2>
           {textTabs.map((tab) => (
             <div key={tab.id} className="space-y-1.5">
-              <Label>
+              <Label htmlFor={`tab-${tab.id}`}>
                 {tab.tabType}
                 {tab.required ? " *" : ""}
               </Label>
               <Input
+                id={`tab-${tab.id}`}
                 value={tabValues[tab.id] ?? ""}
                 onChange={(e) => setTabValues((p) => ({ ...p, [tab.id]: e.target.value }))}
               />
@@ -306,10 +313,8 @@ function HostedSignInner() {
 
       {signTabs.length > 0 ? (
         <Surface className="space-y-2 p-4">
-          <h2 className="text-sm font-semibold">Signature</h2>
-          <p className="text-xs text-muted-foreground">
-            {signTabs.length} signature field(s) will be applied when you finish.
-          </p>
+          <h2 className="text-sm font-semibold">{t("signature")}</h2>
+          <p className="text-xs text-muted-foreground">{t("signatureHint", { count: signTabs.length })}</p>
         </Surface>
       ) : null}
 
@@ -317,11 +322,17 @@ function HostedSignInner() {
 
       {declineOpen ? (
         <Surface className="space-y-3 p-4">
-          <Label>Decline reason</Label>
-          <Textarea value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} rows={3} />
+          <Label htmlFor="decline-reason">{t("declineReason")}</Label>
+          <Textarea
+            id="decline-reason"
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+            placeholder={t("declineReasonPlaceholder")}
+            rows={3}
+          />
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setDeclineOpen(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -329,30 +340,31 @@ function HostedSignInner() {
               loading={busy}
               onClick={() => void submit(true)}
             >
-              Confirm decline
+              {t("confirmDecline")}
             </Button>
           </div>
         </Surface>
       ) : (
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={() => setDeclineOpen(true)}>
-            Decline
+            {t("decline")}
           </Button>
           <Button className="flex-1" loading={busy} onClick={() => void submit(false)}>
-            Finish
+            {t("finish")}
           </Button>
         </div>
       )}
-    </main>
+    </PublicPageShell>
   );
 }
 
 export default function HostedEnvelopeSignPage() {
+  const t = useTranslations("hostedSign");
   return (
     <Suspense
       fallback={
         <main className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
-          Loading…
+          {t("loading")}
         </main>
       }
     >

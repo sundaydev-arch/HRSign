@@ -84,9 +84,12 @@ export function TaskList({ canSeeAll, canCreate }: { canSeeAll: boolean; canCrea
     void load();
   }, [load]);
 
-  const visibleTabs = TABS.filter(
-    (tabDef) => tabDef.value !== "all" || canSeeAll || tab === "all",
-  );
+  const visibleTabs = TABS.filter((tabDef) => {
+    if (tabDef.value === "all") return canSeeAll || tab === "all";
+    // "Mine" is for initiators; employees/leaders who cannot create rarely need it.
+    if (tabDef.value === "mine") return Boolean(canCreate) || tab === "mine";
+    return true;
+  });
 
   const emptyKey =
     tab === "pending-approve"

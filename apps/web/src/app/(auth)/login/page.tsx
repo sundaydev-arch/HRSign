@@ -68,7 +68,7 @@ export default function LoginPage() {
       toast.error(t("errorInvalid"));
       return;
     }
-    router.push("/tasks");
+    router.push("/dashboard");
     router.refresh();
   }
 
@@ -135,7 +135,7 @@ export default function LoginPage() {
                   variant="outline"
                   size="lg"
                   className="w-full"
-                  onClick={() => void signIn("oidc", { callbackUrl: "/tasks" })}
+                  onClick={() => void signIn("oidc", { callbackUrl: "/dashboard" })}
                 >
                   {t("oidcButton")}
                 </Button>
@@ -156,7 +156,7 @@ export default function LoginPage() {
                       <FormControl>
                         <Input
                           type="email"
-                          placeholder="you@company.com"
+                          placeholder={t("emailPlaceholder")}
                           autoComplete="email"
                           {...field}
                         />

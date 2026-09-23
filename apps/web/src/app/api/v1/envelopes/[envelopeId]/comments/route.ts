@@ -1,8 +1,9 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { actorUserId, requireApiKeyOrSession } from "@/lib/api-auth";
-import { getEnvelopeOrThrow } from "@/lib/envelopes";
+import { actorUserId } from "@/lib/api-auth";
+import { assertEnvelopeAccess, requireV1Hr } from "@/lib/v1-authz";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
+import { getEnvelopeOrThrow } from "@/lib/envelopes";
 
 export const runtime = "nodejs";
 
@@ -11,9 +12,10 @@ export async function GET(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
-    await getEnvelopeOrThrow(envelopeId);
+    const env = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, env);
     const comments = await prisma.envelopeComment.findMany({
       where: { envelopeId },
       orderBy: { createdAt: "asc" },
@@ -38,9 +40,10 @@ export async function POST(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    const actor = await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
-    await getEnvelopeOrThrow(envelopeId);
+    const env = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, env);
     const body = (await req.json()) as { body?: string; documentId?: string; page?: number };
     if (!body.body?.trim()) throw new ApiError(400, "VALIDATION_FAILED");
     const name = actor.kind === "session" ? actor.name : actor.name;

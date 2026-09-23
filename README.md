@@ -74,7 +74,7 @@ HRSign turns a blank PDF into a controlled, auditable signing workflow:
 - Email (SMTP) notifications with i18n templates; pluggable Notifier interface
 - Bilingual UI infrastructure: `zh-CN` / `en` via next-intl (Accept-Language + switcher + cookie; ICU MessageFormat)
 - Docker one-shot (`Dockerfile` + compose `app`/`worker`/`mailpit` profiles), `/api/health`, zod env validation, Prisma migration baseline
-- API Keys + HMAC webhooks + OpenAPI (`docs/openapi.yaml`) + batch task create; admin UI for keys/webhooks/settings
+- API Keys + HMAC webhooks + OpenAPI ([v1 contract](./packages/contracts/openapi/docusign-parity.yaml); legacy task routes in [`docs/openapi.yaml`](./docs/openapi.yaml)) + batch task create; admin UI for keys/webhooks/settings
 - pg-boss worker for notify retries, expiry scan, retention scan; legal hold toggles in archive
 - Optional OIDC SSO; CSP/security headers; in-process rate limits; PDF upload heuristics; GitHub Actions CI
 
@@ -188,7 +188,7 @@ pnpm worker            # optional: pg-boss worker in another terminal
 pnpm build && pnpm start
 ```
 
-Integration docs: [docs/openapi.yaml](./docs/openapi.yaml). Verify audit chain: `pnpm audit:verify`.
+Integration docs: [packages/contracts/openapi/docusign-parity.yaml](./packages/contracts/openapi/docusign-parity.yaml) (canonical `/api/v1`). Legacy HR task routes: [docs/openapi.yaml](./docs/openapi.yaml). Verify audit chain: `pnpm audit:verify`.
 
 ### Demo accounts
 
@@ -199,9 +199,9 @@ Integration docs: [docs/openapi.yaml](./docs/openapi.yaml). Verify audit chain: 
 | Department leader | `leader@hrsign.local` | `Leader@123456` |
 | Employee | `employee@hrsign.local` | `Employee@123456` |
 
-> Demo seals are clearly marked `DEMO SEAL`. Never place a real company seal in the repository.
+Seed data is framed as **Yunqi Information Technology (Shanghai)** — realistic HR names and documents, no “[Demo]” labels in the UI. Seal PNGs in the repo are still synthetic artwork (never commit a real company seal).
 
-Demo script, five Chinese starter templates, and a full feature matrix: **[docs/DEMO.md](./docs/DEMO.md)**. Seed publishes contract / offer / onboarding / resignation / employment certificates and a pending task **【演示】张三 · 录用通知签署**.
+Walkthrough and feature matrix: **[docs/DEMO.md](./docs/DEMO.md)**. After seed, leader sees pending task **录用通知 — 周婉清 · 产品经理**.
 
 ## Usage walkthrough
 

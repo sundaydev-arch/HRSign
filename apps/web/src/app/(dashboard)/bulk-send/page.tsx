@@ -1,9 +1,10 @@
 "use client";
 
 import { EmptyState } from "@/components/layout/EmptyState";
+import { PageStack } from "@/components/layout/PageStack";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { CreatePanel, FieldHint, ListPanel } from "@/components/layout/ResourcePanels";
 import { TableRowsSkeleton } from "@/components/layout/skeletons";
-import { Surface } from "@/components/layout/Surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
+import { api } from "@/lib/client";
 import { useApiError } from "@/lib/use-api-error";
 import { Layers, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -41,7 +42,9 @@ export default function BulkSendPage() {
   const [rows, setRows] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [templateId, setTemplateId] = useState("");
-  const [csv, setCsv] = useState("name,email\nAlice,alice@example.com\nBob,bob@example.com");
+  const [csv, setCsv] = useState(
+    "name,email\nZhou Wanqing,wanqing.zhou@outlook.com\nLi Jun,li.jun@yunqi-tech.cn",
+  );
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
@@ -74,7 +77,6 @@ export default function BulkSendPage() {
       if (hasHeader && header.startsWith("name")) {
         return { name: a, email: b || a };
       }
-      // email,name or just email
       if (line.includes("@")) {
         if (b?.includes("@")) return { name: a, email: b };
         if (a?.includes("@")) return { email: a, name: b || a };
@@ -109,25 +111,45 @@ export default function BulkSendPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <PageStack>
       <PageHeader title={t("title")} description={t("subtitle")} />
-      <Surface className="space-y-3 p-4 sm:p-5">
-        <h2 className="text-sm font-semibold">{t("create")}</h2>
+
+      <CreatePanel
+        title={t("create")}
+        hint={t("createHint")}
+        actions={
+          <Button loading={creating} onClick={() => void create()}>
+            <Plus className="mr-1 h-4 w-4" />
+            {t("create")}
+          </Button>
+        }
+      >
         <div className="space-y-1.5">
-          <Label>{t("templateId")}</Label>
-          <Input value={templateId} onChange={(e) => setTemplateId(e.target.value)} placeholder="tmpl_…" />
+          <Label htmlFor="bulk-template">{t("templateId")}</Label>
+          <Input
+            id="bulk-template"
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+            placeholder={t("templateIdPlaceholder")}
+            className="font-mono text-sm"
+            autoComplete="off"
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>{t("rows")}</Label>
-          <Textarea rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} className="font-mono text-xs" />
-          <p className="text-xs text-muted-foreground">{t("rowsHint")}</p>
+          <Label htmlFor="bulk-rows">{t("rows")}</Label>
+          <Textarea
+            id="bulk-rows"
+            rows={6}
+            value={csv}
+            onChange={(e) => setCsv(e.target.value)}
+            placeholder={t("rowsPlaceholder")}
+            className="font-mono text-xs"
+          />
+          <FieldHint>{t("rowsHint")}</FieldHint>
         </div>
-        <Button loading={creating} onClick={() => void create()}>
-          <Plus className="mr-1 h-4 w-4" />
-          {t("create")}
-        </Button>
-      </Surface>
-      <Surface>
+      </CreatePanel>
+
+      <ListPanel title={t("listTitle")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -163,7 +185,7 @@ export default function BulkSendPage() {
             )}
           </TableBody>
         </Table>
-      </Surface>
-    </div>
+      </ListPanel>
+    </PageStack>
   );
 }

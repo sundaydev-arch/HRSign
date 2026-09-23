@@ -1,17 +1,28 @@
-import { ApiError, handleApiError } from "@/lib/api";
+import { ApiError, getClientIp, handleApiError } from "@/lib/api";
 import { createEnvelope, sendEnvelope, toEnvelopeDto } from "@/lib/envelopes";
 import { prisma } from "@/lib/prisma";
+import { rateLimitChecked } from "@/lib/rate-limit";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-/** Public: start an envelope from a PowerForm (self-serve). */
+/** Public: start an envelope from a PowerForm (self-serve). Rate-limited by IP + slug. */
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ slug: string }> },
 ) {
   try {
     const { slug } = await ctx.params;
+    const ip = getClientIp(req);
+    const rl = rateLimitChecked({
+      key: `powerform-start:${ip}:${slug}`,
+      limit: 10,
+      windowMs: 60_000,
+    });
+    if (!rl.ok) {
+      throw new ApiError(429, "RATE_LIMITED", { retryAfterSeconds: rl.retryAfterSeconds });
+    }
+
     const body = (await req.json()) as { name?: string; email?: string };
     if (!body.name?.trim() || !body.email?.trim()) {
       throw new ApiError(400, "VALIDATION_FAILED");

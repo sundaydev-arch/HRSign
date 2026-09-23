@@ -43,6 +43,9 @@ jobs:
       - name: i18n key parity
         run: node scripts/check-i18n-keys.mjs
 
+      - name: Contract artifacts
+        run: pnpm contract:test
+
       - name: Build
         env:
           SKIP_ENV_VALIDATION: "1"

@@ -120,16 +120,16 @@ function buildSampleCsv(opts: {
   const sampleValues = valueFields.map((f) => {
     if (f.type === "DATE") return defaultExpiresDate();
     if (/身份证|id.?card|passport/i.test(f.label)) return "110101199001011234";
-    if (/姓名|name/i.test(f.label)) return "张三";
-    if (/岗位|position|title|job/i.test(f.label)) return "工程师";
-    return "示例";
+    if (/姓名|name/i.test(f.label)) return "周婉清";
+    if (/岗位|position|title|job/i.test(f.label)) return "产品经理";
+    return "云启总部";
   });
   const row = [
-    "批量导入示例任务",
+    "录用通知 — 周婉清 · 产品经理",
     defaultExpiresDate(),
     ...sampleValues,
-    "signer@example.com",
-    "张三",
+    "wanqing.zhou@outlook.com",
+    "周婉清",
     ...(opts.needsSeal ? [opts.sealUserId ?? ""] : []),
   ];
   return `${headers.join(",")}\n${row.map(escapeCsv).join(",")}\n`;

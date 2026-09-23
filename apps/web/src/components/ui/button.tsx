@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "pressable inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "pressable focus-control inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -50,6 +50,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const Comp = asChild ? Slot : "button"
     const showSpinner = !asChild && loading
+    if (
+      process.env.NODE_ENV !== "production" &&
+      size === "icon" &&
+      !asChild &&
+      !props["aria-label"] &&
+      !props["aria-labelledby"]
+    ) {
+      console.warn("[Button] size=\"icon\" requires aria-label for accessibility")
+    }
     return (
       <Comp
         className={cn(

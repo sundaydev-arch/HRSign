@@ -3,32 +3,40 @@ import bcrypt from "bcryptjs";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DbLocale } from "../src/i18n/config";
-import { createSigningTask } from "../src/lib/create-task";
+import type { DbLocale } from "../apps/web/src/i18n/config";
+import { createSigningTask } from "../apps/web/src/lib/create-task";
 import {
   createPresetPdf,
   defaultFieldsForPreset,
+  pdfPageCount,
   presetCatalogName,
-} from "../src/lib/template-presets";
+} from "../apps/web/src/lib/template-presets";
 
 const prisma = new PrismaClient();
 
+/** Local-only logins (no public DNS). Names look like a real Shanghai tech company roster. */
 const SEED_USERS: Array<{
   email: string;
   fullName: string;
   role: UserRole;
   password: string;
 }> = [
-  { email: "admin@hrsign.local", fullName: "System Admin", role: "SUPER_ADMIN", password: "Admin@123456" },
-  { email: "hr@hrsign.local", fullName: "Chen Siyuan", role: "HR", password: "Hr@123456" },
-  { email: "leader@hrsign.local", fullName: "Li Wei", role: "DEPT_LEADER", password: "Leader@123456" },
-  { email: "employee@hrsign.local", fullName: "Wang Xiaoming", role: "EMPLOYEE", password: "Employee@123456" },
+  { email: "admin@hrsign.local", fullName: "林启航", role: "SUPER_ADMIN", password: "Admin@123456" },
+  { email: "hr@hrsign.local", fullName: "陈思远", role: "HR", password: "Hr@123456" },
+  { email: "leader@hrsign.local", fullName: "李伟", role: "DEPT_LEADER", password: "Leader@123456" },
+  { email: "employee@hrsign.local", fullName: "王晓明", role: "EMPLOYEE", password: "Employee@123456" },
 ];
 
 const SEED_SEALS: Array<{ name: string; style: "ROUND_CHINESE" | "TEXT_INTERNATIONAL" | "NONE" }> = [
-  { name: "Company Seal", style: "ROUND_CHINESE" },
-  { name: "Contract Seal", style: "ROUND_CHINESE" },
-  { name: "HR Seal", style: "TEXT_INTERNATIONAL" },
+  { name: "云启科技公章", style: "ROUND_CHINESE" },
+  { name: "云启合同专用章", style: "ROUND_CHINESE" },
+  { name: "云启人事专用章", style: "ROUND_CHINESE" },
+];
+
+/** Old demo titles — deleted on re-seed so lists stay clean. */
+const LEGACY_TASK_TITLES = [
+  "【演示】张三 · 录用通知签署",
+  "[Demo] Alex Zhang — Offer letter signing",
 ];
 
 const SEED_CATEGORIES: TemplateCategory[] = [
@@ -41,15 +49,40 @@ const SEED_CATEGORIES: TemplateCategory[] = [
 
 const SEED_LOCALES: DbLocale[] = ["zh_CN", "en"];
 
+const CANDIDATE = {
+  zh: {
+    name: "周婉清",
+    position: "产品经理",
+    salary: "28000",
+    startDate: "2026-10-08",
+    email: "wanqing.zhou@outlook.com",
+    taskTitle: "录用通知 — 周婉清 · 产品经理",
+  },
+  en: {
+    name: "Zhou Wanqing",
+    position: "Product Manager",
+    salary: "28000",
+    startDate: "2026-10-08",
+    email: "wanqing.zhou@outlook.com",
+    taskTitle: "Offer letter — Zhou Wanqing · Product Manager",
+  },
+} as const;
+
 function loadSealPng(): Buffer | null {
-  const demoPath = join(process.cwd(), "apps/web/public/brand/demo-seal.png");
-  if (existsSync(demoPath)) return readFileSync(demoPath);
+  const candidates = [
+    join(process.cwd(), "apps/web/public/brand/demo-seal.png"),
+    join(process.cwd(), "public/brand/demo-seal.png"),
+    join(__dirname, "../apps/web/public/brand/demo-seal.png"),
+  ];
+  for (const demoPath of candidates) {
+    if (existsSync(demoPath)) return readFileSync(demoPath);
+  }
   return null;
 }
 
 async function upsertPublishedTemplate(
   hrId: string,
-  storage: Awaited<ReturnType<typeof import("../src/server/providers").getStorage>>,
+  storage: Awaited<ReturnType<typeof import("../apps/web/src/server/providers").getStorage>>,
   category: TemplateCategory,
   locale: DbLocale,
 ) {
@@ -61,8 +94,7 @@ async function upsertPublishedTemplate(
 
   const buffer = await createPresetPdf(category, locale);
   const sha256 = createHash("sha256").update(buffer).digest("hex");
-  const pdf = await (await import("pdf-lib")).PDFDocument.load(buffer);
-  const pageCount = pdf.getPageCount();
+  const pageCount = await pdfPageCount(buffer);
   const presetFields = defaultFieldsForPreset(category, locale);
 
   if (existing?.versions[0]) {
@@ -133,35 +165,13 @@ async function upsertPublishedTemplate(
   return template;
 }
 
-async function seedDemoTask(opts: {
-  hrId: string;
-  leaderId: string;
-  employeeId: string;
-  offerTemplateId: string;
-  locale: DbLocale;
-}) {
-  const title =
-    opts.locale === "en"
-      ? "[Demo] Alex Zhang — Offer letter signing"
-      : "【演示】张三 · 录用通知签署";
-  const existing = await prisma.signingTask.findFirst({ where: { title } });
-  if (existing) {
-    await prisma.signingTask.delete({ where: { id: existing.id } });
-    console.log(`seed demo task reset: ${title}`);
-  }
-
-  const version = await prisma.templateVersion.findFirst({
-    where: { templateId: opts.offerTemplateId, status: "PUBLISHED" },
-    orderBy: { version: "desc" },
-    include: { fields: true },
-  });
-  if (!version) {
-    console.warn("no published offer version — skip demo task");
-    return;
-  }
-
-  const demoValues: Record<string, string> = {};
-  for (const f of version.fields) {
+function fillOfferValues(
+  fields: Array<{ id: string; type: string; label: string; required: boolean }>,
+  locale: DbLocale,
+): Record<string, string> {
+  const c = locale === "en" ? CANDIDATE.en : CANDIDATE.zh;
+  const values: Record<string, string> = {};
+  for (const f of fields) {
     if (f.type !== "TEXT" && f.type !== "DATE") continue;
     const label = f.label.toLowerCase();
     if (
@@ -171,52 +181,90 @@ async function seedDemoTask(opts: {
       label.includes("employee name") ||
       label.includes("full name")
     ) {
-      demoValues[f.id] = opts.locale === "en" ? "Alex Zhang" : "张三";
-    } else if (label.includes("岗位") || label.includes("position")) {
-      demoValues[f.id] = opts.locale === "en" ? "Product Manager" : "产品经理";
+      values[f.id] = c.name;
+    } else if (label.includes("岗位") || label.includes("position") || label.includes("title")) {
+      values[f.id] = c.position;
     } else if (label.includes("入职") || label.includes("start") || f.type === "DATE") {
-      demoValues[f.id] = "2026-10-08";
+      values[f.id] = c.startDate;
     } else if (label.includes("薪") || label.includes("salary") || label.includes("月薪")) {
-      demoValues[f.id] = "28000";
+      values[f.id] = c.salary;
+    } else if (label.includes("部门") || label.includes("department")) {
+      values[f.id] = locale === "en" ? "Product" : "产品部";
     } else if (f.required) {
-      demoValues[f.id] = opts.locale === "en" ? "Demo" : "演示";
+      values[f.id] = locale === "en" ? "Yunqi HQ" : "云启总部";
     }
+  }
+  return values;
+}
+
+async function seedOfferTask(opts: {
+  hrId: string;
+  leaderId: string;
+  employeeId: string;
+  offerTemplateId: string;
+  locale: DbLocale;
+}) {
+  const c = opts.locale === "en" ? CANDIDATE.en : CANDIDATE.zh;
+  const title = c.taskTitle;
+
+  for (const legacy of LEGACY_TASK_TITLES) {
+    const hit = await prisma.signingTask.findFirst({ where: { title: legacy } });
+    if (hit) {
+      await prisma.signingTask.delete({ where: { id: hit.id } });
+      console.log(`removed legacy task: ${legacy}`);
+    }
+  }
+
+  const existing = await prisma.signingTask.findFirst({ where: { title } });
+  if (existing) {
+    await prisma.signingTask.delete({ where: { id: existing.id } });
+    console.log(`reset offer task: ${title}`);
+  }
+
+  const version = await prisma.templateVersion.findFirst({
+    where: { templateId: opts.offerTemplateId, status: "PUBLISHED" },
+    orderBy: { version: "desc" },
+    include: { fields: true },
+  });
+  if (!version) {
+    console.warn("no published offer version — skip offer task");
+    return;
   }
 
   const expiresAt = new Date(Date.now() + 14 * 24 * 3600 * 1000);
   const { taskId } = await createSigningTask({
     userId: opts.hrId,
     ip: "127.0.0.1",
-    userAgent: "prisma-seed",
+    userAgent: "prisma-seed/yunqi",
     body: {
       templateId: opts.offerTemplateId,
       title,
       flowType: "SEQUENTIAL",
       expiresAt: expiresAt.toISOString(),
-      formValues: demoValues,
+      formValues: fillOfferValues(version.fields, opts.locale),
       signers: [
         { signRole: "APPROVER", userId: opts.leaderId },
         { signRole: "COMPANY_SEAL", userId: opts.employeeId },
         {
           signRole: "PERSONAL_SIGNATURE",
-          externalFullName: opts.locale === "en" ? "Alex Zhang" : "张三",
-          externalEmail: "alex.zhang.demo@example.com",
+          externalFullName: c.name,
+          externalEmail: c.email,
         },
       ],
     },
   });
-  console.log(`seeded demo task: ${title} (${taskId})`);
+  console.log(`seeded offer task: ${title} (${taskId})`);
 }
 
 async function seedStorageAssets(adminId: string, hrId: string, leaderId: string, employeeId: string) {
-  let storage: Awaited<ReturnType<typeof import("../src/server/providers").getStorage>>;
+  let storage: Awaited<ReturnType<typeof import("../apps/web/src/server/providers").getStorage>>;
   try {
-    const { getStorage } = await import("../src/server/providers");
+    const { getStorage } = await import("../apps/web/src/server/providers");
     storage = getStorage();
     await storage.exists("__seed_probe__");
   } catch (err) {
     console.warn(
-      "MinIO/storage unavailable — skipping demo seals/templates/task:",
+      "MinIO/storage unavailable — skipping seals/templates/tasks:",
       err instanceof Error ? err.message : err,
     );
     return;
@@ -228,9 +276,18 @@ async function seedStorageAssets(adminId: string, hrId: string, leaderId: string
     return;
   }
 
-  // Retire Chinese-named demo seals so English UI stays Latin-only.
+  const legacySealNames = [
+    "演示公章",
+    "公司公章",
+    "合同专用章",
+    "人事专用章",
+    "Company Seal",
+    "Contract Seal",
+    "HR Seal",
+    "E2E test seal",
+  ];
   const legacySeals = await prisma.seal.findMany({
-    where: { name: { in: ["演示公章", "公司公章", "合同专用章", "人事专用章"] } },
+    where: { name: { in: legacySealNames } },
     include: { _count: { select: { signatures: true } } },
   });
   for (const seal of legacySeals) {
@@ -243,11 +300,29 @@ async function seedStorageAssets(adminId: string, hrId: string, leaderId: string
     }
   }
 
+  // Strip E2E / placeholder tasks so the inbox looks like a live HR desk.
+  const junkTasks = await prisma.signingTask.findMany({
+    where: {
+      OR: [
+        { title: { contains: "E2E" } },
+        { title: { contains: "张三" } },
+        { title: { contains: "Jane Doe" } },
+        { title: { contains: "批量导入示例" } },
+        { title: { contains: "Batch import sample" } },
+      ],
+    },
+    select: { id: true, title: true },
+  });
+  for (const t of junkTasks) {
+    await prisma.signingTask.delete({ where: { id: t.id } });
+    console.log(`removed junk task: ${t.title}`);
+  }
+
   for (const spec of SEED_SEALS) {
     const existing = await prisma.seal.findFirst({ where: { name: spec.name, createdBy: adminId } });
     if (existing) {
       await prisma.seal.update({ where: { id: existing.id }, data: { enabled: true } });
-      console.log(`seed seal skipped (exists): ${spec.name}`);
+      console.log(`seed seal exists: ${spec.name}`);
       continue;
     }
     const storageKey = `seals/${randomUUID()}.png`;
@@ -287,7 +362,7 @@ async function seedStorageAssets(adminId: string, hrId: string, leaderId: string
       data: { status: "ARCHIVED", archivedAt: new Date() },
     });
     console.log(
-      `archived ${archived.count} non-demo published version(s):`,
+      `archived ${archived.count} extra published version(s):`,
       extras.map((t) => t.name).join(", "),
     );
   }
@@ -295,7 +370,7 @@ async function seedStorageAssets(adminId: string, hrId: string, leaderId: string
   for (const locale of SEED_LOCALES) {
     const offerId = offerByLocale[locale];
     if (offerId) {
-      await seedDemoTask({
+      await seedOfferTask({
         hrId,
         leaderId,
         employeeId,
@@ -324,15 +399,25 @@ async function main() {
   if (admin && hr && leader && employee) {
     await seedStorageAssets(admin.id, hr.id, leader.id, employee.id);
 
+    // Migrate old English department names if present
+    const oldEng = await prisma.department.findUnique({ where: { name: "Engineering" } });
+    if (oldEng) {
+      await prisma.department.update({ where: { id: oldEng.id }, data: { name: "产品研发中心" } });
+    }
+    const oldHr = await prisma.department.findUnique({ where: { name: "Human Resources" } });
+    if (oldHr) {
+      await prisma.department.update({ where: { id: oldHr.id }, data: { name: "人力资源部" } });
+    }
+
     const eng = await prisma.department.upsert({
-      where: { name: "Engineering" },
+      where: { name: "产品研发中心" },
       update: { leaderUserId: leader.id },
-      create: { name: "Engineering", leaderUserId: leader.id },
+      create: { name: "产品研发中心", leaderUserId: leader.id },
     });
     const hrDept = await prisma.department.upsert({
-      where: { name: "Human Resources" },
+      where: { name: "人力资源部" },
       update: { leaderUserId: hr.id },
-      create: { name: "Human Resources", leaderUserId: hr.id },
+      create: { name: "人力资源部", leaderUserId: hr.id },
     });
     await prisma.user.update({ where: { id: leader.id }, data: { departmentId: eng.id } });
     await prisma.user.update({ where: { id: employee.id }, data: { departmentId: eng.id } });
@@ -342,7 +427,7 @@ async function main() {
     if (policyCount === 0) {
       await prisma.approvalPolicy.create({
         data: {
-          name: "Default offer approval",
+          name: "录用通知审批",
           category: "OFFER",
           departmentId: eng.id,
           approverUserIds: [leader.id],
@@ -350,17 +435,29 @@ async function main() {
           enabled: true,
         },
       });
+    } else {
+      await prisma.approvalPolicy.updateMany({
+        where: { name: "Default offer approval" },
+        data: { name: "录用通知审批" },
+      });
     }
-    console.log("seeded departments + sample approval policy");
+    console.log("seeded departments + approval policy");
   }
 
+  const retentionLabels: Record<TemplateCategory, string> = {
+    OFFER: "录用文档保留",
+    ENTRY: "入职材料保留",
+    CONTRACT: "劳动合同保留",
+    RESIGN: "离职证明保留",
+    CERTIFICATE: "在职证明保留",
+  };
   const categories: TemplateCategory[] = ["OFFER", "ENTRY", "CONTRACT", "RESIGN", "CERTIFICATE"];
   for (const category of categories) {
     await prisma.retentionPolicy.upsert({
       where: { category },
-      update: { name: `${category} default retention` },
+      update: { name: retentionLabels[category] },
       create: {
-        name: `${category} default retention`,
+        name: retentionLabels[category],
         category,
         retentionYears: category === "CONTRACT" ? 10 : 5,
         action: "SOFT_DELETE",
@@ -368,7 +465,7 @@ async function main() {
       },
     });
   }
-  console.log("seeded retention policies for all template categories");
+  console.log("seeded retention policies");
 }
 
 main()

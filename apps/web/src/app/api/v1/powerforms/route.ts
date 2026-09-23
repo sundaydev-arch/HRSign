@@ -1,5 +1,5 @@
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const powerForms = await prisma.powerForm.findMany({ orderBy: { createdAt: "desc" } });
     return NextResponse.json({
       powerForms: powerForms.map((p) => ({
@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const body = (await req.json()) as { name?: string; templateId?: string };
     if (!body.name || !body.templateId) {
       return NextResponse.json({ error: { code: "VALIDATION_FAILED" } }, { status: 400 });

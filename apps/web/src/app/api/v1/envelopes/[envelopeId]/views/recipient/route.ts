@@ -1,7 +1,8 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { assertEnvelopeAccess, requireV1Hr } from "@/lib/v1-authz";
 import { createRecipientEmbeddedView } from "@/lib/embedded-view";
 import { NextResponse, type NextRequest } from "next/server";
+import { getEnvelopeOrThrow } from "@/lib/envelopes";
 
 export const runtime = "nodejs";
 
@@ -10,8 +11,10 @@ export async function POST(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
+    const envAccess = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, envAccess);
     const body = (await req.json()) as {
       recipientId?: string;
       returnUrl?: string;

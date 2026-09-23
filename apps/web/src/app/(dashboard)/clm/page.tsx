@@ -1,9 +1,10 @@
 "use client";
 
 import { EmptyState } from "@/components/layout/EmptyState";
+import { PageStack } from "@/components/layout/PageStack";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { CreatePanel, ListPanel } from "@/components/layout/ResourcePanels";
 import { TableRowsSkeleton } from "@/components/layout/skeletons";
-import { Surface } from "@/components/layout/Surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
+import { api } from "@/lib/client";
 import { useApiError } from "@/lib/use-api-error";
 import { FolderKanban, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -38,6 +39,8 @@ type Row = {
   counterparty: string | null;
   envelopeId: string | null;
 };
+
+const STATUSES = ["draft", "in_review", "active", "expired", "terminated"] as const;
 
 export default function ClmPage() {
   const t = useTranslations("clm");
@@ -102,34 +105,59 @@ export default function ClmPage() {
     }
   }
 
+  function statusLabel(status: string) {
+    if ((STATUSES as readonly string[]).includes(status)) {
+      return t(`status.${status}` as "status.draft");
+    }
+    return status;
+  }
+
   return (
-    <div className="space-y-4">
+    <PageStack>
       <PageHeader title={t("title")} description={t("subtitle")} />
-      <Surface className="space-y-3 p-4 sm:p-5">
-        <h2 className="text-sm font-semibold">{t("create")}</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+
+      <CreatePanel
+        title={t("create")}
+        hint={t("createHint")}
+        actions={
+          <Button loading={creating} onClick={() => void create()}>
+            <Plus className="mr-1 h-4 w-4" />
+            {t("create")}
+          </Button>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>{t("name")}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="clm-name">{t("name")}</Label>
+            <Input
+              id="clm-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("namePlaceholder")}
+              autoComplete="off"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("counterparty")}</Label>
-            <Input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
+            <Label htmlFor="clm-party">{t("counterparty")}</Label>
+            <Input
+              id="clm-party"
+              value={counterparty}
+              onChange={(e) => setCounterparty(e.target.value)}
+              placeholder={t("counterpartyPlaceholder")}
+              autoComplete="off"
+            />
           </div>
         </div>
-        <Button loading={creating} onClick={() => void create()}>
-          <Plus className="mr-1 h-4 w-4" />
-          {t("create")}
-        </Button>
-      </Surface>
-      <Surface>
+      </CreatePanel>
+
+      <ListPanel title={t("listTitle")}>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t("colName")}</TableHead>
               <TableHead>{t("colParty")}</TableHead>
               <TableHead>{t("colStatus")}</TableHead>
-              <TableHead />
+              <TableHead className="w-44">{t("changeStatus")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -147,22 +175,22 @@ export default function ClmPage() {
                   <TableCell className="font-medium">{row.name}</TableCell>
                   <TableCell>{row.counterparty ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{row.status}</Badge>
+                    <Badge variant="outline">{statusLabel(row.status)}</Badge>
                   </TableCell>
-                  <TableCell className="w-40">
+                  <TableCell>
                     <Select
                       value={row.status}
                       onValueChange={(v) => void setStatus(row.agreementId, v)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("changeStatus")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="draft">draft</SelectItem>
-                        <SelectItem value="in_review">in_review</SelectItem>
-                        <SelectItem value="active">active</SelectItem>
-                        <SelectItem value="expired">expired</SelectItem>
-                        <SelectItem value="terminated">terminated</SelectItem>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {t(`status.${s}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -171,7 +199,7 @@ export default function ClmPage() {
             )}
           </TableBody>
         </Table>
-      </Surface>
-    </div>
+      </ListPanel>
+    </PageStack>
   );
 }

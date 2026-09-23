@@ -1,5 +1,6 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { actorUserId, requireApiKeyOrSession } from "@/lib/api-auth";
+import { actorUserId } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { toRoomDto } from "@/lib/platform-products";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const rows = await prisma.room.findMany({
       orderBy: { updatedAt: "desc" },
       include: { members: true, documents: true },
@@ -21,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const body = (await req.json()) as {
       name?: string;
       description?: string;

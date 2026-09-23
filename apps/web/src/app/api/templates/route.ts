@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/rbac";
 import { ApiError, getClientIp, getUserAgent, handleApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
-import { createBlankA4Pdf } from "@/lib/blank-pdf";
 import { documentContentForCreate } from "@/lib/document-presets";
 import { assertSafePdfUpload } from "@/lib/pdf-safety";
 import { renderDocumentToPdf } from "@/lib/pdf/document-render";

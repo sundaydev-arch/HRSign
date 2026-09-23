@@ -18,14 +18,16 @@ pnpm dev
 
 | 角色 | 邮箱 | 密码 | 演示用途 |
 |------|------|------|----------|
-| 超管 | `admin@hrsign.local` | `Admin@123456` | 用户/设置/印章/Webhook/API Key |
-| HR | `hr@hrsign.local` | `Hr@123456` | 模板、发起任务、外链、归档审计 |
-| 部门负责人 | `leader@hrsign.local` | `Leader@123456` | **待我审批**（演示任务已就绪） |
-| 员工 | `employee@hrsign.local` | `Employee@123456` | 审批后用印 |
+| 超管 | `admin@hrsign.local` | `Admin@123456` | 林启航 · 用户/设置/印章/Webhook |
+| HR | `hr@hrsign.local` | `Hr@123456` | 陈思远 · 模板、发起、外链、归档 |
+| 部门负责人 | `leader@hrsign.local` | `Leader@123456` | 李伟 · **待我审批**（录用通知已就绪） |
+| 员工 | `employee@hrsign.local` | `Employee@123456` | 王晓明 · 审批后盖「云启人事专用章」 |
+
+界面与 PDF 中的主体为虚构公司 **云启信息科技（上海）有限公司**，看起来像真实人事数据；登录邮箱仍用 `.local` 便于本机演示。
 
 ## 初始模板（已发布 · 中英双语）
 
-种子按界面语言各准备一套人事预设（PDF + 字段标签）：
+种子按界面语言各准备一套人事文书（PDF + 字段）：
 
 | 中文 | English | 类别 |
 |------|---------|------|
@@ -35,18 +37,17 @@ pnpm dev
 | **离职证明** | Resignation Certificate | RESIGN |
 | **在职证明** | Employment Certificate | CERTIFICATE |
 
-切换语言后，模板 / 任务 / 归档列表只显示对应语言的数据。演示账号姓名为英文（Chen Siyuan 等），避免英文界面出现中文姓名。
+印章库：**云启科技公章**、**云启合同专用章**、**云启人事专用章**。
 
-印章库：**Company Seal**、**Contract Seal**、**HR Seal**（均标注 DEMO SEAL）。
-
-种子会自动归档非演示已发布模板，保证列表干净。
+种子会归档非标准已发布模板，保证列表干净。
 
 ## 推荐演示路径（约 5 分钟）
 
-1. **leader** 登录 → 签署任务 → 「待我审批」→ 打开演示录用通知任务 → 通过。  
-   - 中文：`【演示】张三 · 录用通知签署`  
-   - English: `[Demo] Alex Zhang — Offer letter signing`  
-2. **employee** 登录 → 「待我签署」→ 选择 **人事专用章** → 盖章。  
+1. **leader** 登录 → 签署任务 → 「待我审批」→ 打开  
+   - 中文：`录用通知 — 周婉清 · 产品经理`  
+   - English: `Offer letter — Zhou Wanqing · Product Manager`  
+   → 通过。  
+2. **employee** 登录 → 「待我签署」→ 选择 **云启人事专用章** → 盖章。  
 3. **hr** 登录 → 打开同一任务 → 对外部签署人「复制短链」或「重发邮件」。  
 4. 无痕窗口打开短链 `/s/{code}` → 邮箱验证码（Mailpit / 服务端日志）→ 手写签名提交。  
 5. **hr** 查看归档与审计日志。

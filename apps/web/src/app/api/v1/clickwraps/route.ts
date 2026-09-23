@@ -1,5 +1,5 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { createClickwrap, toClickwrapDto } from "@/lib/platform-products";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, type NextRequest } from "next/server";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const rows = await prisma.clickwrap.findMany({
       orderBy: { updatedAt: "desc" },
       include: { _count: { select: { acceptances: true } } },
@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const body = (await req.json()) as {
       name?: string;
       displayName?: string;

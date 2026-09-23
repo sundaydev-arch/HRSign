@@ -1,9 +1,11 @@
 openapi: 3.0.3
 info:
-  title: HRSign API
-  version: 0.2.0
+  title: HRSign API (legacy task / admin routes)
+  version: 0.3.0
   description: |
-    Public and API-key authenticated routes for HRSign.
+    **Legacy** session and API-key routes for HR signing tasks, templates, and admin.
+    Canonical DocuSign-parity **`/api/v1`** surface: `packages/contracts/openapi/docusign-parity.yaml`.
+
     Authenticate with a session cookie (browser) or `Authorization: Bearer hrs_…` API key.
 servers:
   - url: http://localhost:3000

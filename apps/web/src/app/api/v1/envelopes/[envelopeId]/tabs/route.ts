@@ -1,5 +1,5 @@
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { assertEnvelopeAccess, requireV1Hr } from "@/lib/v1-authz";
 import {
   getEnvelopeOrThrow,
   replaceEnvelopeTabs,
@@ -16,9 +16,10 @@ export async function GET(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
     const env = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, env);
     return NextResponse.json({ tabs: toEnvelopeDto(env).tabs });
   } catch (err) {
     return handleApiError(err);
@@ -30,8 +31,10 @@ export async function PUT(
   ctx: { params: Promise<{ envelopeId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId } = await ctx.params;
+    const existing = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, existing);
     const body = (await req.json()) as { tabs?: TabInput[] };
     const tabs = (body.tabs ?? []).map((t) => ({
       ...t,

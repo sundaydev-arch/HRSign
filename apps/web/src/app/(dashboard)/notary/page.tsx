@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/layout/EmptyState";
+import { PageStack } from "@/components/layout/PageStack";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CreatePanel, FieldHint, ListPanel } from "@/components/layout/ResourcePanels";
 import { TableRowsSkeleton } from "@/components/layout/skeletons";
@@ -118,7 +119,7 @@ export default function NotaryPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <PageStack>
       <PageHeader title={t("title")} description={t("subtitle")} />
 
       <CreatePanel
@@ -225,6 +226,6 @@ export default function NotaryPage() {
           </TableBody>
         </Table>
       </ListPanel>
-    </div>
+    </PageStack>
   );
 }

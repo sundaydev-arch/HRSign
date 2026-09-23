@@ -9,6 +9,7 @@ import { api } from "@/lib/client";
 import { apiV1 } from "@/lib/api-base";
 import { useApiError } from "@/lib/use-api-error";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -201,7 +202,7 @@ export default function EnvelopeDetailPage() {
       ) : null}
 
       <Button asChild variant="outline" size="sm">
-        <a href="/envelopes">{tc("back")}</a>
+        <Link href="/envelopes">{tc("back")}</Link>
       </Button>
     </div>
   );

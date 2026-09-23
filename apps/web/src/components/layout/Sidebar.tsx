@@ -80,7 +80,7 @@ interface NavItem {
   roles: UserRole[];
 }
 
-const WORKSPACE_ITEMS: NavItem[] = [
+const WORKFLOW_ITEMS: NavItem[] = [
   {
     href: "/dashboard",
     labelKey: "dashboard",
@@ -88,10 +88,27 @@ const WORKSPACE_ITEMS: NavItem[] = [
     roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
   },
   {
+    href: "/tasks",
+    labelKey: "tasks",
+    icon: FileSignature,
+    roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
+  },
+  { href: "/templates", labelKey: "templates", icon: LayoutList, roles: ["SUPER_ADMIN", "HR"] },
+  {
+    href: "/archive",
+    labelKey: "archive",
+    icon: Archive,
+    roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
+  },
+];
+
+/** DocuSign-style envelope tools — HR / admin only (employees use Signing Tasks). */
+const ESIGN_ITEMS: NavItem[] = [
+  {
     href: "/envelopes",
     labelKey: "envelopes",
     icon: FileStack,
-    roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
+    roles: ["SUPER_ADMIN", "HR"],
   },
   {
     href: "/powerforms",
@@ -105,6 +122,9 @@ const WORKSPACE_ITEMS: NavItem[] = [
     icon: Layers,
     roles: ["SUPER_ADMIN", "HR"],
   },
+];
+
+const PRODUCT_ITEMS: NavItem[] = [
   {
     href: "/clickwraps",
     labelKey: "clickwraps",
@@ -128,19 +148,6 @@ const WORKSPACE_ITEMS: NavItem[] = [
     labelKey: "notary",
     icon: Scale,
     roles: ["SUPER_ADMIN", "HR"],
-  },
-  { href: "/templates", labelKey: "templates", icon: LayoutList, roles: ["SUPER_ADMIN", "HR"] },
-  {
-    href: "/tasks",
-    labelKey: "tasks",
-    icon: FileSignature,
-    roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
-  },
-  {
-    href: "/archive",
-    labelKey: "archive",
-    icon: Archive,
-    roles: ["SUPER_ADMIN", "HR", "DEPT_LEADER", "EMPLOYEE"],
   },
 ];
 
@@ -178,6 +185,7 @@ function NavLink({
       href={item.href}
       onClick={onNavigate}
       title={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "group relative flex items-center rounded-lg text-[13.5px] transition-colors duration-150",
         collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3 py-2",
@@ -236,7 +244,9 @@ export function Sidebar({
   const tApp = useTranslations("app");
   const tLocale = useTranslations("localeSwitch");
   const roleLabel = t("role", { role });
-  const workspace = WORKSPACE_ITEMS.filter((item) => item.roles.includes(role));
+  const workflow = WORKFLOW_ITEMS.filter((item) => item.roles.includes(role));
+  const esign = ESIGN_ITEMS.filter((item) => item.roles.includes(role));
+  const products = PRODUCT_ITEMS.filter((item) => item.roles.includes(role));
   const admin = ADMIN_ITEMS.filter((item) => item.roles.includes(role));
   const [displayName, setDisplayName] = useState(userName);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -259,6 +269,29 @@ export function Sidebar({
       // Cookie still drives UI locale.
     }
     router.refresh();
+  }
+
+  function renderSection(sectionKey: "workflow" | "esign" | "products" | "admin", items: NavItem[]) {
+    if (items.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-1">
+        {!collapsed ? (
+          <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
+            {t(sectionKey)}
+          </p>
+        ) : null}
+        {items.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            label={t(item.labelKey)}
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+            active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
+          />
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -310,45 +343,10 @@ export function Sidebar({
 
       <ScrollArea className={cn("min-h-0 flex-1", collapsed ? "px-1.5" : "px-3")}>
         <nav className="flex flex-col gap-6 pb-4">
-          {workspace.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              {!collapsed ? (
-                <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
-                  {t("workspace")}
-                </p>
-              ) : null}
-              {workspace.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  label={t(item.labelKey)}
-                  onNavigate={onNavigate}
-                  collapsed={collapsed}
-                  active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
-                />
-              ))}
-            </div>
-          ) : null}
-
-          {admin.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              {!collapsed ? (
-                <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
-                  {t("admin")}
-                </p>
-              ) : null}
-              {admin.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  label={t(item.labelKey)}
-                  onNavigate={onNavigate}
-                  collapsed={collapsed}
-                  active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
-                />
-              ))}
-            </div>
-          ) : null}
+          {renderSection("workflow", workflow)}
+          {renderSection("esign", esign)}
+          {renderSection("products", products)}
+          {renderSection("admin", admin)}
         </nav>
       </ScrollArea>
 

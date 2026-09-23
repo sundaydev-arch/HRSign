@@ -1,12 +1,12 @@
-import { handleApiError } from "@/lib/api";
-import { actorUserId, requireApiKeyOrSession } from "@/lib/api-auth";
+import { ApiError, handleApiError } from "@/lib/api";
+import { actorUserId } from "@/lib/api-auth";
 import {
   createEnvelope,
   toEnvelopeDto,
   type EnvelopeDto,
 } from "@/lib/envelopes";
 import { prisma } from "@/lib/prisma";
-import { ApiError } from "@/lib/api";
+import { envelopeAccessWhere, requireV1Hr } from "@/lib/v1-authz";
 import type { RecipientType } from "@prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -14,11 +14,14 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const status = req.nextUrl.searchParams.get("status") ?? undefined;
     const limit = Math.min(200, Number(req.nextUrl.searchParams.get("limit") ?? 50) || 50);
     const rows = await prisma.envelope.findMany({
-      where: status ? { status: status as never } : undefined,
+      where: {
+        ...envelopeAccessWhere(actor),
+        ...(status ? { status: status as never } : {}),
+      },
       include: { documents: true, recipients: true, tabs: true },
       orderBy: { updatedAt: "desc" },
       take: limit,
@@ -33,36 +36,30 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const body = (await req.json()) as {
       subject?: string;
       emailBlurb?: string;
       expiresAt?: string;
-      documents?: Array<{
-        name: string;
-        documentOrder?: number;
-        storageKey?: string;
-        pageCount?: number;
-      }>;
+      accountId?: string;
+      documents?: Array<{ name: string; documentOrder?: number; blank?: boolean }>;
       recipients?: Array<{
         recipientType: RecipientType;
         routingOrder: number;
         name: string;
         email: string;
-        userId?: string;
         phoneE164?: string;
         deliveryChannel?: string;
         idvMethod?: string;
-        hostUserId?: string;
-        witnessForId?: string;
       }>;
     };
-    if (!body.subject?.trim()) throw new ApiError(400, "ENVELOPE_SUBJECT_REQUIRED");
+    if (!body.subject?.trim()) throw new ApiError(400, "VALIDATION_FAILED");
     const env = await createEnvelope({
-      subject: body.subject,
+      subject: body.subject.trim(),
       emailBlurb: body.emailBlurb,
       expiresAt: body.expiresAt,
       createdBy: actorUserId(actor),
+      accountId: body.accountId,
       documents: body.documents,
       recipients: body.recipients,
     });

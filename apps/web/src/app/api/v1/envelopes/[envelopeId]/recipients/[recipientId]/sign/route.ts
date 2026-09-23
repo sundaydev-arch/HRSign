@@ -1,7 +1,7 @@
 import { handleApiError } from "@/lib/api";
-import { requireApiKeyOrSession } from "@/lib/api-auth";
-import { signAsRecipient, toEnvelopeDto } from "@/lib/envelopes";
+import { assertEnvelopeAccess, requireV1Hr } from "@/lib/v1-authz";
 import { NextResponse, type NextRequest } from "next/server";
+import { getEnvelopeOrThrow, signAsRecipient, toEnvelopeDto } from "@/lib/envelopes";
 
 export const runtime = "nodejs";
 
@@ -10,8 +10,10 @@ export async function POST(
   ctx: { params: Promise<{ envelopeId: string; recipientId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const { envelopeId, recipientId } = await ctx.params;
+    const envAccess = await getEnvelopeOrThrow(envelopeId);
+    assertEnvelopeAccess(actor, envAccess);
     const body = (await req.json().catch(() => ({}))) as {
       tabValues?: Record<string, string>;
       signatureImageBase64?: string;

@@ -1,5 +1,6 @@
 import { ApiError, handleApiError } from "@/lib/api";
 import { requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { addAccountMember, getAccountOrThrow } from "@/lib/accounts";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -10,7 +11,7 @@ export async function GET(
   ctx: { params: Promise<{ accountId: string }> },
 ) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const { accountId } = await ctx.params;
     const row = await getAccountOrThrow(accountId);
     return NextResponse.json({

@@ -1,7 +1,7 @@
 "use client";
 
 import { SignatureDisclaimer } from "@/components/sign/SignatureDisclaimer";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PublicPageShell } from "@/components/layout/PublicPageShell";
 import { DetailSkeleton } from "@/components/layout/skeletons";
 import { RefreshButton } from "@/components/layout/RefreshButton";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -236,18 +237,12 @@ export function ExternalSign({ token }: { token: string }) {
   const canDraw = Boolean(data?.me.canSign && verified);
 
   return (
-    <div className="min-h-svh bg-background">
-      <header className="border-b border-border/80 bg-card/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2.5 px-6">
-          <BrandLogo className="h-8 w-8 rounded-lg" />
-          <span className="text-sm font-semibold tracking-tight">HRSign</span>
-        </div>
-      </header>
-      <div className="mx-auto max-w-6xl px-6 pt-4">
+    <PublicPageShell variant="wide" className="!px-0 !py-0">
+      <div className="border-b border-border/80 bg-card/90 px-4 py-3 backdrop-blur-md sm:px-6">
         <SignatureDisclaimer variant="compact" />
       </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <div className="px-4 py-8 sm:px-6">
         {loadError ? (
           <Card className="mx-auto max-w-md">
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -323,12 +318,14 @@ export function ExternalSign({ token }: { token: string }) {
                               name="code"
                               render={({ field }) => (
                                 <FormItem>
+                                  <FormLabel>{t("codeLabel")}</FormLabel>
                                   <div className="flex gap-2">
                                     <FormControl>
                                       <Input
                                         placeholder={t("codePlaceholder")}
                                         maxLength={6}
                                         inputMode="numeric"
+                                        autoComplete="one-time-code"
                                         {...field}
                                       />
                                     </FormControl>
@@ -429,7 +426,7 @@ export function ExternalSign({ token }: { token: string }) {
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
         <DialogContent className="sm:max-w-md">
@@ -456,6 +453,6 @@ export function ExternalSign({ token }: { token: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PublicPageShell>
   );
 }

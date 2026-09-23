@@ -1,6 +1,6 @@
 "use client";
 
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PublicPageShell } from "@/components/layout/PublicPageShell";
 import { Surface } from "@/components/layout/Surface";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiClientError } from "@/lib/client";
 import { Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -20,6 +21,7 @@ type Clickwrap = {
 };
 
 export default function PublicClickwrapPage() {
+  const t = useTranslations("clickwrapPublic");
   const params = useParams<{ id: string }>();
   const [data, setData] = useState<Clickwrap | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function PublicClickwrapPage() {
 
   async function accept() {
     if (!email.trim() || !agreed) {
-      setError("ACCEPT_REQUIRED");
+      setError(t("acceptRequired"));
       return;
     }
     setBusy(true);
@@ -69,60 +71,83 @@ export default function PublicClickwrapPage() {
 
   if (error && !data) {
     return (
-      <main className="mx-auto flex min-h-svh max-w-lg flex-col items-center justify-center gap-3 p-6">
-        <BrandLogo className="h-8" />
-        <p className="text-sm text-destructive">{error}</p>
-      </main>
+      <PublicPageShell>
+        <p className="py-12 text-center text-sm text-destructive">
+          {error === "LOAD_FAILED" || error.startsWith("HTTP_") || error.includes("NOT_FOUND")
+            ? t("unavailable")
+            : error}
+        </p>
+      </PublicPageShell>
     );
   }
 
   if (!data) {
     return (
-      <main className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </main>
+      <PublicPageShell>
+        <p className="py-12 text-center text-sm text-muted-foreground">{t("loading")}</p>
+      </PublicPageShell>
     );
   }
 
   if (done) {
     return (
-      <main className="mx-auto flex min-h-svh max-w-lg flex-col items-center justify-center gap-3 p-6 text-center">
-        <BrandLogo className="h-8" />
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Check className="h-6 w-6" />
+      <PublicPageShell>
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Check className="h-6 w-6" />
+          </div>
+          <h1 className="text-lg font-semibold">{t("recorded")}</h1>
+          <p className="font-mono text-xs text-muted-foreground">{done.documentHash.slice(0, 16)}…</p>
         </div>
-        <h1 className="text-lg font-semibold">Agreement recorded</h1>
-        <p className="font-mono text-xs text-muted-foreground">{done.documentHash.slice(0, 16)}…</p>
-      </main>
+      </PublicPageShell>
     );
   }
 
   return (
-    <main className="mx-auto min-h-svh max-w-lg space-y-4 p-4 py-8 sm:p-6">
-      <BrandLogo className="h-7" />
-      <Surface className="space-y-3 p-4">
-        <h1 className="text-base font-semibold">{data.displayName}</h1>
-        <p className="text-xs text-muted-foreground">Version {data.version}</p>
+    <PublicPageShell>
+      <Surface className="space-y-4 p-4 sm:p-5">
+        <div className="space-y-1">
+          <h1 className="text-base font-semibold tracking-tight">{data.displayName}</h1>
+          <p className="text-xs text-muted-foreground">{t("version", { version: data.version })}</p>
+        </div>
         <div
-          className="max-h-64 overflow-auto rounded-md border border-border/60 p-3 text-sm prose prose-sm dark:prose-invert"
+          className="prose prose-sm max-h-64 overflow-auto rounded-md border border-border/60 p-3 text-sm dark:prose-invert"
           dangerouslySetInnerHTML={{ __html: data.bodyHtml || "" }}
         />
         <div className="space-y-1.5">
-          <Label>Name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Label htmlFor="cw-name">{t("name")}</Label>
+          <Input
+            id="cw-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("namePlaceholder")}
+            autoComplete="name"
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Label htmlFor="cw-email">{t("email")}</Label>
+          <Input
+            id="cw-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t("emailPlaceholder")}
+            autoComplete="email"
+          />
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={agreed} onCheckedChange={(v) => setAgreed(v === true)} />I agree
+        <label className="flex items-start gap-2 text-sm leading-snug">
+          <Checkbox
+            checked={agreed}
+            onCheckedChange={(v) => setAgreed(v === true)}
+            className="mt-0.5"
+          />
+          <span>{t("agree")}</span>
         </label>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button className="w-full" loading={busy} onClick={() => void accept()}>
-          Accept
+          {t("accept")}
         </Button>
       </Surface>
-    </main>
+    </PublicPageShell>
   );
 }

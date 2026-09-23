@@ -1,5 +1,6 @@
 import { ApiError, handleApiError } from "@/lib/api";
-import { actorUserId, requireApiKeyOrSession } from "@/lib/api-auth";
+import { actorUserId } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import { createBulkSendBatch, listBulkSendBatches, type BulkRow } from "@/lib/bulk-send";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -7,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireApiKeyOrSession();
+    await requireV1Hr();
     const limit = Math.min(200, Number(req.nextUrl.searchParams.get("limit") ?? 50) || 50);
     return NextResponse.json({ batches: await listBulkSendBatches(limit) });
   } catch (err) {
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     const body = (await req.json()) as {
       templateId?: string;
       rows?: BulkRow[];

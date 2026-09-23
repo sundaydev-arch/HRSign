@@ -1,5 +1,6 @@
 import { handleApiError } from "@/lib/api";
 import { actorUserId, requireApiKeyOrSession } from "@/lib/api-auth";
+import { requireV1Hr } from "@/lib/v1-authz";
 import {
   createAccount,
   ensureDefaultAccount,
@@ -12,7 +13,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const actor = await requireApiKeyOrSession();
+    const actor = await requireV1Hr();
     // Ensure at least one account exists for the org
     await ensureDefaultAccount(actorUserId(actor));
     const rows = await prisma.account.findMany({
