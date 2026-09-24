@@ -466,6 +466,32 @@ async function main() {
     });
   }
   console.log("seeded retention policies");
+
+  // Platform IAM + default Yunqi account
+  const { seedPermissionMatrix } = await import("../apps/web/src/lib/permissions");
+  await seedPermissionMatrix();
+  console.log("seeded permission matrix");
+
+  if (admin && hr) {
+    const acct = await prisma.account.upsert({
+      where: { slug: "yunqi" },
+      update: { name: "云启信息科技（上海）有限公司" },
+      create: { name: "云启信息科技（上海）有限公司", slug: "yunqi" },
+    });
+    for (const [userId, role] of [
+      [admin.id, "admin"],
+      [hr.id, "admin"],
+      ...(leader ? [[leader.id, "sender"] as const] : []),
+      ...(employee ? [[employee.id, "viewer"] as const] : []),
+    ] as Array<[string, string]>) {
+      await prisma.accountMember.upsert({
+        where: { accountId_userId: { accountId: acct.id, userId } },
+        update: { role },
+        create: { accountId: acct.id, userId, role },
+      });
+    }
+    console.log(`seeded account: ${acct.slug}`);
+  }
 }
 
 main()

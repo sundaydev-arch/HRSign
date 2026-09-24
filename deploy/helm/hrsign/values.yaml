@@ -1,0 +1,22 @@
+image:
+  web: ghcr.io/sundaydev-arch/hrsign-web:latest
+  worker: ghcr.io/sundaydev-arch/hrsign-worker:latest
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  web: 2
+  worker: 1
+
+service:
+  port: 3000
+
+env:
+  APP_URL: http://localhost:3000
+  WATERMARK_TEXT: HRSign INTERNAL
+  # DATABASE_URL, MINIO_*, NEXTAUTH_SECRET via secrets
+
+ingress:
+  enabled: false
+  host: hrsign.example.com
+
+resources: {}

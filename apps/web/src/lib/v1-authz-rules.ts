@@ -16,24 +16,65 @@ function isUnscopedActor(actor: AuthActor): boolean {
   return actor.kind === "apiKey" || actor.role === "SUPER_ADMIN";
 }
 
+export type EnvelopeAccessOpts = {
+  /** Soft multi-tenant: filter by account when provided. */
+  accountId?: string | null;
+  /** Account IDs the actor is a member of (session users). */
+  memberAccountIds?: string[];
+};
+
 /**
  * Prisma filter for envelope list/get.
- * SUPER_ADMIN and API keys see all; HR sees envelopes they created.
+ * SUPER_ADMIN and API keys see all (optionally narrowed by accountId).
+ * HR sees envelopes they created OR in accounts they belong to.
  */
-export function envelopeAccessWhere(actor: AuthActor): Prisma.EnvelopeWhereInput {
-  if (isUnscopedActor(actor)) return {};
-  return { createdBy: actorId(actor) };
+export function envelopeAccessWhere(
+  actor: AuthActor,
+  opts: EnvelopeAccessOpts = {},
+): Prisma.EnvelopeWhereInput {
+  const accountClause: Prisma.EnvelopeWhereInput | undefined = opts.accountId
+    ? { accountId: opts.accountId }
+    : undefined;
+
+  if (isUnscopedActor(actor)) {
+    return accountClause ?? {};
+  }
+
+  const ownership: Prisma.EnvelopeWhereInput = {
+    OR: [
+      { createdBy: actorId(actor) },
+      ...(opts.memberAccountIds?.length
+        ? [{ accountId: { in: opts.memberAccountIds } }]
+        : []),
+    ],
+  };
+
+  if (accountClause) {
+    return { AND: [ownership, accountClause] };
+  }
+  return ownership;
 }
 
 /** Throw FORBIDDEN when the actor cannot access this envelope. */
 export function assertEnvelopeAccess(
   actor: AuthActor,
-  envelope: { createdBy: string },
+  envelope: { createdBy: string; accountId?: string | null },
+  opts: EnvelopeAccessOpts = {},
 ): void {
-  if (isUnscopedActor(actor)) return;
-  if (envelope.createdBy !== actorId(actor)) {
-    throw new ApiError(403, "FORBIDDEN");
+  if (isUnscopedActor(actor)) {
+    if (opts.accountId && envelope.accountId && envelope.accountId !== opts.accountId) {
+      throw new ApiError(403, "FORBIDDEN");
+    }
+    return;
   }
+  if (envelope.createdBy === actorId(actor)) return;
+  if (
+    envelope.accountId &&
+    opts.memberAccountIds?.includes(envelope.accountId)
+  ) {
+    return;
+  }
+  throw new ApiError(403, "FORBIDDEN");
 }
 
 /**

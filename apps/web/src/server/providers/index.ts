@@ -176,6 +176,17 @@ function ensureStage1Defaults(): void {
   registerSignatureProvider("HANDWRITE", imageSeal);
   registerStorage(storage);
   stage1Bootstrapped = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { isPadesConfigured } = require("@/lib/pades-config") as typeof import("@/lib/pades-config");
+    if (isPadesConfigured()) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { PadesProvider } = require("./signature/pades") as typeof import("./signature/pades");
+      registerSignatureProvider("PADES", new PadesProvider({ storage }));
+    }
+  } catch {
+    /* optional crypto bootstrap */
+  }
 }
 
 /** Explicitly register Phase 1 defaults (idempotent; mostly useful in tests). */

@@ -1,7 +1,7 @@
 import { ApiError, getClientIp, handleApiError } from "@/lib/api";
 import { createEnvelope, sendEnvelope, toEnvelopeDto } from "@/lib/envelopes";
 import { prisma } from "@/lib/prisma";
-import { rateLimitChecked } from "@/lib/rate-limit";
+import { rateLimitCheckedAsync } from "@/lib/rate-limit";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function POST(
   try {
     const { slug } = await ctx.params;
     const ip = getClientIp(req);
-    const rl = rateLimitChecked({
+    const rl = await rateLimitCheckedAsync({
       key: `powerform-start:${ip}:${slug}`,
       limit: 10,
       windowMs: 60_000,

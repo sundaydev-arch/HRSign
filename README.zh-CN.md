@@ -18,7 +18,8 @@ Py/Go **独立实现**同一 OpenAPI，**永不调用** Next。契约见 [`packa
 | **Go** | [`apps/api-go`](./apps/api-go) | Go 契约端口（当前内存实现） |
 
 能力矩阵：[FEATURE_MATRIX.md](./packages/contracts/FEATURE_MATRIX.md)。  
-架构说明：[docs/architecture/multi-backend.md](./docs/architecture/multi-backend.md)。
+架构说明：[docs/architecture/multi-backend.md](./docs/architecture/multi-backend.md)。  
+运维（部署 / SLO / PAdES）：[docs/operations/](./docs/operations/)。
 
 ```bash
 # 可选：让前端指向兄弟后端

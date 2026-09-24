@@ -1,4 +1,5 @@
 import { handleApiError } from "@/lib/api";
+import { isPadesConfigured, padesProviderStatus } from "@/lib/pades-config";
 import { requireV1Hr } from "@/lib/v1-authz";
 import { NextResponse } from "next/server";
 
@@ -8,9 +9,7 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     await requireV1Hr();
-    const padesConfigured = Boolean(
-      process.env.PADES_CERT_PEM || process.env.PADES_CERT_PATH,
-    );
+    const padesConfigured = isPadesConfigured();
     const sm2Configured = Boolean(process.env.GM_SM2_ENABLED === "1");
 
     return NextResponse.json({
@@ -30,9 +29,10 @@ export async function GET() {
         {
           id: "PADES",
           kind: "cms_pkcs7",
-          status: padesConfigured ? "partial" : "stub",
+          status: padesProviderStatus(),
           configured: padesConfigured,
-          legalNote: "Demo PKCS#7 / self-signed unless production CA PEMs are configured",
+          legalNote:
+            "Operator PEM PKCS#7 (PAdES-B-B style). Not LTV / not PRC 可靠电子签名 unless your CA attests.",
         },
         {
           id: "GM_SM2",

@@ -58,6 +58,6 @@ Every row must eventually be **done** in **all three** backends (Next / Python /
 | CA / PAdES providers | partial | partial | partial |
 | Official SDKs | partial | planned | planned |
 
-> **Storage note:** Python (`apps/api-py`) and Go (`apps/api-go`) are **independent** in-memory implementations of the same OpenAPI contract. They do not call Next. Wire `HRSIGN_DATABASE_URL` in a future iteration to persist via [`schema/envelope.sql`](./schema/envelope.sql). Next remains the durable Prisma reference.
+> **Storage note:** Python (`apps/api-py`) and Go (`apps/api-go`) are **independent** implementations of the same OpenAPI contract. They do not call Next. Set `HRSIGN_DATABASE_URL` (same Postgres as Prisma) to persist Envelope list/create/get against the shared schema; otherwise they use in-memory maps. Next remains the durable Prisma reference for the full product surface.
 
 **How to run contract smoke:** `pnpm contract:test` (artifacts). With live servers: `PY_URL=… GO_URL=… pnpm contract:test`. Architecture: [`docs/architecture/multi-backend.md`](../../docs/architecture/multi-backend.md).

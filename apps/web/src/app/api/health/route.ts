@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStorage } from "@/server/providers";
 
@@ -7,10 +7,25 @@ export const dynamic = "force-dynamic";
 
 /**
  * Liveness/readiness probe for Docker / k8s / load balancers.
- * Returns 200 when DB responds; storage check is best-effort (503 if both fail).
+ * - ?probe=live → process up (always 200)
+ * - ?probe=ready (default) → DB required; storage best-effort
  */
-export async function GET() {
-  const checks: { database: "ok" | "error"; storage: "ok" | "error" | "skipped"; detail?: string } = {
+export async function GET(req: NextRequest) {
+  const probe = req.nextUrl.searchParams.get("probe") ?? "ready";
+
+  if (probe === "live") {
+    return NextResponse.json({
+      status: "ok",
+      probe: "live",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  const checks: {
+    database: "ok" | "error";
+    storage: "ok" | "error" | "skipped";
+    detail?: string;
+  } = {
     database: "error",
     storage: "skipped",
   };
@@ -24,7 +39,6 @@ export async function GET() {
 
   try {
     const storage = getStorage();
-    // Probe with a non-destructive exists check on a sentinel key.
     await storage.exists("__healthcheck__");
     checks.storage = "ok";
   } catch (err) {
@@ -38,6 +52,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: ok ? "ok" : "degraded",
+      probe: "ready",
       checks,
       timestamp: new Date().toISOString(),
     },

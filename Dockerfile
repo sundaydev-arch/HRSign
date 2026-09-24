@@ -46,3 +46,10 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 CMD ["node", "apps/web/server.js"]
+
+# ---- worker (pg-boss job runner) ----
+FROM builder AS worker
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+CMD ["pnpm", "exec", "tsx", "--tsconfig", "apps/web/tsconfig.json", "apps/web/src/server/jobs/worker.ts"]

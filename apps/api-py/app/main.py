@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field
 
+from app import db as pg
+
 BACKEND = "python"
 VERSION = "0.4.0"
 
@@ -192,7 +194,12 @@ def _dispatch_connect(event: str, data: dict[str, Any] | None = None) -> None:
 
 @app.get("/v1/health")
 def health():
-    return {"status": "ok", "backend": BACKEND, "version": VERSION}
+    return {
+        "status": "ok",
+        "backend": BACKEND,
+        "version": VERSION,
+        "storage": "postgres" if pg.enabled() else "memory",
+    }
 
 
 @app.get("/v1/tabs/types")
@@ -245,6 +252,9 @@ def trust_providers():
 
 @app.get("/v1/envelopes")
 def list_envelopes(status: str | None = None, limit: int = 50):
+    db_rows = pg.list_envelopes(status=status, limit=limit)
+    if db_rows is not None:
+        return {"envelopes": db_rows}
     rows = list(_ENVELOPES.values())
     if status:
         rows = [e for e in rows if e["status"] == status]
@@ -254,6 +264,18 @@ def list_envelopes(status: str | None = None, limit: int = 50):
 
 @app.post("/v1/envelopes", status_code=201)
 def create_envelope(body: CreateEnvelope):
+    if pg.enabled():
+        payload = {
+            "subject": body.subject.strip(),
+            "emailBlurb": body.emailBlurb,
+            "expiresAt": body.expiresAt,
+            "accountId": body.accountId,
+            "documents": [d.model_dump() for d in (body.documents or [])],
+            "recipients": [r.model_dump() for r in (body.recipients or [])],
+        }
+        created = pg.create_envelope(payload)
+        if created:
+            return created
     eid = f"env_{uuid.uuid4().hex[:16]}"
     docs = body.documents or [DocumentIn(name="Document 1")]
     recipients = body.recipients or []
@@ -316,6 +338,9 @@ def create_envelope(body: CreateEnvelope):
 
 @app.get("/v1/envelopes/{envelope_id}")
 def get_envelope(envelope_id: str):
+    db_env = pg.get_envelope(envelope_id)
+    if db_env is not None:
+        return db_env
     return _get_env(envelope_id)
 
 

@@ -44,4 +44,8 @@ Out of scope: missing hardening that is explicitly documented as not-yet-impleme
 - Serve over HTTPS behind a reverse proxy; keep `AUTH_TRUST_HOST` aligned with your proxy setup.
 - Seal master images are read server-side only; do not make the MinIO bucket public.
 - Phase 1 seals/signatures are **not** legally qualified electronic signatures — see the README disclaimer.
-- Public PowerForm start is rate-limited in-process; put a reverse-proxy or WAF limit in front for multi-instance production.
+- Public PowerForm start is rate-limited in-process; set `RATE_LIMIT_REDIS_URL` (and install `ioredis`) for multi-instance, or put a reverse-proxy/WAF limit in front.
+- Soft multi-tenancy: `Account` + `X-Account-Id` scopes envelopes; this is **not** hard SaaS DB isolation. SUPER_ADMIN remains unscoped.
+- Permission matrix (`RolePermission`) backs `requirePermission`; keep seed/admin matrix in sync with roles.
+- PAdES with operator PEMs is cryptographic evidence only — not a hosted CA / LTV product. See `docs/operations/pades.md`.
+- Protect `/api/metrics` at the edge (IP allowlist); scrape only from your observability network.

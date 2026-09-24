@@ -34,6 +34,6 @@ In-memory store covering Phase 0–4 contract routes plus hosted sign, condition
 PY_URL=http://127.0.0.1:8000/v1 GO_URL=http://127.0.0.1:8080/v1 pnpm contract:test
 ```
 
-## Persistence (planned)
+## Persistence
 
-Set `HRSIGN_DATABASE_URL` in a future iteration to use [`packages/contracts/schema/envelope.sql`](../../packages/contracts/schema/envelope.sql). Until then, data resets on process restart.
+Set `HRSIGN_DATABASE_URL` (or `DATABASE_URL`) to the same Postgres as Prisma to persist Envelope list/create/get. Without it, data resets on process restart. Schema: shared Prisma migrations / [`packages/contracts/schema/envelope.sql`](../../packages/contracts/schema/envelope.sql).

@@ -122,6 +122,39 @@ services:
       SMTP_SECURE: "false"
       SMTP_FROM: "HRSign <hrsign@example.com>"
 
+  api-py:
+    image: python:3.12-slim
+    profiles: ["backends"]
+    working_dir: /app
+    volumes:
+      - ./apps/api-py:/app
+      - ./packages/contracts:/contracts:ro
+    environment:
+      HRSIGN_DATABASE_URL: postgresql://hrsign:hrsign_dev_123@postgres:5432/hrsign
+    command: >
+      bash -c "pip install -q -e . && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-go:
+    image: golang:1.22
+    profiles: ["backends"]
+    working_dir: /src
+    volumes:
+      - ./apps/api-go:/src
+    environment:
+      HRSIGN_DATABASE_URL: postgresql://hrsign:hrsign_dev_123@postgres:5432/hrsign
+      PORT: "8080"
+    command: go run ./cmd/server
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   hrsign_pgdata:
   hrsign_miniodata:

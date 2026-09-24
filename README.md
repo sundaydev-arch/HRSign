@@ -20,7 +20,8 @@ Py/Go are **standalone** (they never call Next). Shared contract only: [`package
 | **Go** | [`apps/api-go`](./apps/api-go) | Go port of the same OpenAPI (in-memory) |
 
 Status grid: [`packages/contracts/FEATURE_MATRIX.md`](./packages/contracts/FEATURE_MATRIX.md).  
-Architecture: [`docs/architecture/multi-backend.md`](./docs/architecture/multi-backend.md).
+Architecture: [`docs/architecture/multi-backend.md`](./docs/architecture/multi-backend.md).  
+Ops (deploy / SLO / PAdES): [`docs/operations/`](./docs/operations/).
 
 ```bash
 # Optional: point the UI at a sibling backend

@@ -20,11 +20,27 @@ function session(role: "SUPER_ADMIN" | "HR" | "EMPLOYEE" | "DEPT_LEADER", id = "
 
 describe("v1-authz envelope scoping", () => {
   it("HR sees only own envelopes", () => {
-    expect(envelopeAccessWhere(session("HR", "hr1"))).toEqual({ createdBy: "hr1" });
+    expect(envelopeAccessWhere(session("HR", "hr1"))).toEqual({
+      OR: [{ createdBy: "hr1" }],
+    });
+  });
+
+  it("HR with account membership includes accounts", () => {
+    expect(
+      envelopeAccessWhere(session("HR", "hr1"), { memberAccountIds: ["acct1"] }),
+    ).toEqual({
+      OR: [{ createdBy: "hr1" }, { accountId: { in: ["acct1"] } }],
+    });
   });
 
   it("SUPER_ADMIN sees all", () => {
     expect(envelopeAccessWhere(session("SUPER_ADMIN"))).toEqual({});
+  });
+
+  it("SUPER_ADMIN with X-Account-Id narrows", () => {
+    expect(envelopeAccessWhere(session("SUPER_ADMIN"), { accountId: "a1" })).toEqual({
+      accountId: "a1",
+    });
   });
 
   it("API key sees all", () => {

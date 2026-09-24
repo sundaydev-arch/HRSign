@@ -1,0 +1,33 @@
+# Staging overlay — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile full up -d
+#
+# Ports shifted to avoid clashing with local dev (3001 / 5434 / 9010).
+
+services:
+  postgres:
+    ports:
+      - "5434:5432"
+    container_name: hrsign-staging-postgres
+
+  minio:
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    container_name: hrsign-staging-minio
+
+  app:
+    container_name: hrsign-staging-app
+    ports:
+      - "3001:3000"
+    environment:
+      NEXTAUTH_URL: http://localhost:3001
+      APP_URL: http://localhost:3001
+      NEXTAUTH_SECRET: change-me-staging-secret-min-16
+      WATERMARK_TEXT: HRSign STAGING
+
+  worker:
+    container_name: hrsign-staging-worker
+    environment:
+      APP_URL: http://localhost:3001
+      NEXTAUTH_SECRET: change-me-staging-secret-min-16
+      WATERMARK_TEXT: HRSign STAGING

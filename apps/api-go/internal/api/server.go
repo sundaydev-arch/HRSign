@@ -142,10 +142,16 @@ type Store struct {
 	notary     map[string]map[string]any
 	accounts   map[string]*Account
 	connect    map[string]*ConnectConfig
+	pg         *PgStore
 }
 
 func NewStore() *Store {
 	t := now()
+	pg, err := OpenPgStore()
+	if err != nil {
+		fmt.Printf("warning: postgres store unavailable: %v\n", err)
+		pg = nil
+	}
 	return &Store{
 		envelopes:  map[string]*Envelope{},
 		powerForms: []map[string]any{},
@@ -154,6 +160,7 @@ func NewStore() *Store {
 		clm:        map[string]map[string]any{},
 		notary:     map[string]map[string]any{},
 		connect:    map[string]*ConnectConfig{},
+		pg:         pg,
 		accounts: map[string]*Account{
 			"acct_default": {
 				AccountID: "acct_default", Name: "Default", Slug: "default",
@@ -261,7 +268,11 @@ func (s *Store) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "backend": Backend, "version": Version})
+		storage := "memory"
+		if s.pg != nil {
+			storage = "postgres"
+		}
+		writeJSON(w, 200, map[string]string{"status": "ok", "backend": Backend, "version": Version, "storage": storage})
 	})
 
 	mux.HandleFunc("GET /v1/tabs/types", func(w http.ResponseWriter, r *http.Request) {
@@ -292,10 +303,17 @@ func (s *Store) Routes() http.Handler {
 	})
 
 	mux.HandleFunc("GET /v1/envelopes", func(w http.ResponseWriter, r *http.Request) {
+		st := r.URL.Query().Get("status")
+		if s.pg != nil {
+			list, err := s.pg.ListEnvelopes(st, 50)
+			if err == nil {
+				writeJSON(w, 200, map[string]any{"envelopes": list})
+				return
+			}
+		}
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 		list := make([]*Envelope, 0, len(s.envelopes))
-		st := r.URL.Query().Get("status")
 		for _, e := range s.envelopes {
 			if st == "" || e.Status == st {
 				list = append(list, e)
@@ -327,6 +345,13 @@ func (s *Store) Routes() http.Handler {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Subject == "" {
 			writeErr(w, 400, "ENVELOPE_SUBJECT_REQUIRED")
 			return
+		}
+		if s.pg != nil {
+			env, err := s.pg.CreateEnvelope(body.Subject, body.AccountID, "system")
+			if err == nil && env != nil {
+				writeJSON(w, 201, env)
+				return
+			}
 		}
 		id := newID("env_")
 		acct := "acct_default"
@@ -388,8 +413,16 @@ func (s *Store) Routes() http.Handler {
 	})
 
 	mux.HandleFunc("GET /v1/envelopes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if s.pg != nil {
+			env, err := s.pg.GetEnvelope(id)
+			if err == nil && env != nil {
+				writeJSON(w, 200, env)
+				return
+			}
+		}
 		s.mu.RLock()
-		env := s.envelopes[r.PathValue("id")]
+		env := s.envelopes[id]
 		s.mu.RUnlock()
 		if env == nil {
 			writeErr(w, 404, "ENVELOPE_NOT_FOUND")

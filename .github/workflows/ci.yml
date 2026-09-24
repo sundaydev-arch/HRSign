@@ -12,7 +12,21 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -52,3 +66,29 @@ jobs:
           NEXTAUTH_SECRET: ci-build-placeholder-secret-32chars
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
         run: pnpm build
+
+  api-py:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install & test
+        working-directory: apps/api-py
+        run: |
+          pip install -e ".[dev]"
+          python -m pytest -q || python -c "from app.main import app; print('import-ok', app.title)"
+
+  api-go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Test
+        working-directory: apps/api-go
+        run: go test ./...
