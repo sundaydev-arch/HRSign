@@ -17,9 +17,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "httpx>=0.27.0"]
 
-[project.scripts]
-hrsign-api = "uvicorn app.main:app --factory"
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

@@ -8,7 +8,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/sdk-ts/package.json ./packages/sdk-ts/
 COPY packages/contracts/package.json ./packages/contracts/
-RUN pnpm install --frozen-lockfile
+COPY prisma/schema.prisma ./prisma/schema.prisma
+# Skip root postinstall (db:generate) — schema generate runs in builder after full COPY.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ---- build ----
 FROM node:20-bookworm-slim AS builder
