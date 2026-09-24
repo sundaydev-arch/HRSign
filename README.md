@@ -200,9 +200,9 @@ Integration docs: [packages/contracts/openapi/docusign-parity.yaml](./packages/c
 | Department leader | `leader@hrsign.local` | `Leader@123456` |
 | Employee | `employee@hrsign.local` | `Employee@123456` |
 
-Seed data is framed as **Yunqi Information Technology (Shanghai)** — realistic HR names and documents, no “[Demo]” labels in the UI. Seal PNGs in the repo are still synthetic artwork (never commit a real company seal).
+Seed data is framed as **Yunqi Information Technology (Shanghai)** with an English roster (Kai Lin, Avery Chen, …) — no “[Demo]” labels in the UI. Seal PNGs in the repo are still synthetic artwork (never commit a real company seal).
 
-Walkthrough and feature matrix: **[docs/DEMO.md](./docs/DEMO.md)**. After seed, leader sees pending task **录用通知 — 周婉清 · 产品经理**.
+Walkthrough and feature matrix: **[docs/DEMO.md](./docs/DEMO.md)**. After seed, leader sees pending task **Offer letter — Wanqing Zhou · Product Manager**.
 
 ## Usage walkthrough
 

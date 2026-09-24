@@ -178,9 +178,9 @@ pnpm build && pnpm start
 | 部门负责人 | `leader@hrsign.local`   | `Leader@123456`   |
 | 员工       | `employee@hrsign.local` | `Employee@123456` |
 
-> 种子数据以虚构公司「云启信息科技」呈现，界面无「演示」标签；仓库内印章为合成图样，切勿提交真实公章。
+> 种子数据以虚构公司 **Yunqi Information Technology (Shanghai)** 的**英文花名册**呈现（Kai Lin / Avery Chen 等），界面无「演示」标签；仓库内印章为合成图样，切勿提交真实公章。
 
-完整剧本与功能对照见 **[docs/DEMO.md](./docs/DEMO.md)**。种子后负责人可见待审批任务 **录用通知 — 周婉清 · 产品经理**。
+完整剧本与功能对照见 **[docs/DEMO.md](./docs/DEMO.md)**。种子后负责人可见待审批任务 **Offer letter — Wanqing Zhou · Product Manager**。
 
 ## 使用流程
 

@@ -14,29 +14,30 @@ import {
 
 const prisma = new PrismaClient();
 
-/** Local-only logins (no public DNS). Names look like a real Shanghai tech company roster. */
+/** Local-only logins (no public DNS). English roster for Yunqi HQ demo. */
 const SEED_USERS: Array<{
   email: string;
   fullName: string;
   role: UserRole;
   password: string;
 }> = [
-  { email: "admin@hrsign.local", fullName: "林启航", role: "SUPER_ADMIN", password: "Admin@123456" },
-  { email: "hr@hrsign.local", fullName: "陈思远", role: "HR", password: "Hr@123456" },
-  { email: "leader@hrsign.local", fullName: "李伟", role: "DEPT_LEADER", password: "Leader@123456" },
-  { email: "employee@hrsign.local", fullName: "王晓明", role: "EMPLOYEE", password: "Employee@123456" },
+  { email: "admin@hrsign.local", fullName: "Kai Lin", role: "SUPER_ADMIN", password: "Admin@123456" },
+  { email: "hr@hrsign.local", fullName: "Avery Chen", role: "HR", password: "Hr@123456" },
+  { email: "leader@hrsign.local", fullName: "Morgan Lee", role: "DEPT_LEADER", password: "Leader@123456" },
+  { email: "employee@hrsign.local", fullName: "Riley Wang", role: "EMPLOYEE", password: "Employee@123456" },
 ];
 
 const SEED_SEALS: Array<{ name: string; style: "ROUND_CHINESE" | "TEXT_INTERNATIONAL" | "NONE" }> = [
-  { name: "云启科技公章", style: "ROUND_CHINESE" },
-  { name: "云启合同专用章", style: "ROUND_CHINESE" },
-  { name: "云启人事专用章", style: "ROUND_CHINESE" },
+  { name: "Yunqi Company Seal", style: "TEXT_INTERNATIONAL" },
+  { name: "Yunqi Contract Seal", style: "TEXT_INTERNATIONAL" },
+  { name: "Yunqi HR Seal", style: "TEXT_INTERNATIONAL" },
 ];
 
 /** Old demo titles — deleted on re-seed so lists stay clean. */
 const LEGACY_TASK_TITLES = [
   "【演示】张三 · 录用通知签署",
   "[Demo] Alex Zhang — Offer letter signing",
+  "录用通知 — 周婉清 · 产品经理",
 ];
 
 const SEED_CATEGORIES: TemplateCategory[] = [
@@ -47,7 +48,8 @@ const SEED_CATEGORIES: TemplateCategory[] = [
   "CERTIFICATE",
 ];
 
-const SEED_LOCALES: DbLocale[] = ["zh_CN", "en"];
+/** English-only seed for demos (Chinese presets remain available via “Create from HR preset”). */
+const SEED_LOCALES: DbLocale[] = ["en"];
 
 const CANDIDATE = {
   zh: {
@@ -59,12 +61,12 @@ const CANDIDATE = {
     taskTitle: "录用通知 — 周婉清 · 产品经理",
   },
   en: {
-    name: "Zhou Wanqing",
+    name: "Wanqing Zhou",
     position: "Product Manager",
     salary: "28000",
     startDate: "2026-10-08",
     email: "wanqing.zhou@outlook.com",
-    taskTitle: "Offer letter — Zhou Wanqing · Product Manager",
+    taskTitle: "Offer letter — Wanqing Zhou · Product Manager",
   },
 } as const;
 
@@ -191,7 +193,7 @@ function fillOfferValues(
     } else if (label.includes("部门") || label.includes("department")) {
       values[f.id] = locale === "en" ? "Product" : "产品部";
     } else if (f.required) {
-      values[f.id] = locale === "en" ? "Yunqi HQ" : "云启总部";
+      values[f.id] = "Yunqi HQ";
     }
   }
   return values;
@@ -281,6 +283,9 @@ async function seedStorageAssets(adminId: string, hrId: string, leaderId: string
     "公司公章",
     "合同专用章",
     "人事专用章",
+    "云启科技公章",
+    "云启合同专用章",
+    "云启人事专用章",
     "Company Seal",
     "Contract Seal",
     "HR Seal",
@@ -399,35 +404,44 @@ async function main() {
   if (admin && hr && leader && employee) {
     await seedStorageAssets(admin.id, hr.id, leader.id, employee.id);
 
-    // Migrate old English department names if present
-    const oldEng = await prisma.department.findUnique({ where: { name: "Engineering" } });
-    if (oldEng) {
-      await prisma.department.update({ where: { id: oldEng.id }, data: { name: "产品研发中心" } });
-    }
-    const oldHr = await prisma.department.findUnique({ where: { name: "Human Resources" } });
-    if (oldHr) {
-      await prisma.department.update({ where: { id: oldHr.id }, data: { name: "人力资源部" } });
+    // Prefer English department names for the demo roster
+    for (const [from, to] of [
+      ["产品研发中心", "Product Engineering"],
+      ["人力资源部", "Human Resources"],
+      ["Engineering", "Product Engineering"],
+    ] as const) {
+      const row = await prisma.department.findUnique({ where: { name: from } });
+      if (row) {
+        const clash = await prisma.department.findUnique({ where: { name: to } });
+        if (!clash) {
+          await prisma.department.update({ where: { id: row.id }, data: { name: to } });
+        }
+      }
     }
 
     const eng = await prisma.department.upsert({
-      where: { name: "产品研发中心" },
+      where: { name: "Product Engineering" },
       update: { leaderUserId: leader.id },
-      create: { name: "产品研发中心", leaderUserId: leader.id },
+      create: { name: "Product Engineering", leaderUserId: leader.id },
     });
     const hrDept = await prisma.department.upsert({
-      where: { name: "人力资源部" },
+      where: { name: "Human Resources" },
       update: { leaderUserId: hr.id },
-      create: { name: "人力资源部", leaderUserId: hr.id },
+      create: { name: "Human Resources", leaderUserId: hr.id },
     });
     await prisma.user.update({ where: { id: leader.id }, data: { departmentId: eng.id } });
     await prisma.user.update({ where: { id: employee.id }, data: { departmentId: eng.id } });
     await prisma.user.update({ where: { id: hr.id }, data: { departmentId: hrDept.id } });
 
+    await prisma.approvalPolicy.updateMany({
+      where: { OR: [{ name: "录用通知审批" }, { name: "Default offer approval" }] },
+      data: { name: "Offer letter approval" },
+    });
     const policyCount = await prisma.approvalPolicy.count();
     if (policyCount === 0) {
       await prisma.approvalPolicy.create({
         data: {
-          name: "录用通知审批",
+          name: "Offer letter approval",
           category: "OFFER",
           departmentId: eng.id,
           approverUserIds: [leader.id],
@@ -435,21 +449,16 @@ async function main() {
           enabled: true,
         },
       });
-    } else {
-      await prisma.approvalPolicy.updateMany({
-        where: { name: "Default offer approval" },
-        data: { name: "录用通知审批" },
-      });
     }
     console.log("seeded departments + approval policy");
   }
 
   const retentionLabels: Record<TemplateCategory, string> = {
-    OFFER: "录用文档保留",
-    ENTRY: "入职材料保留",
-    CONTRACT: "劳动合同保留",
-    RESIGN: "离职证明保留",
-    CERTIFICATE: "在职证明保留",
+    OFFER: "Offer documents retention",
+    ENTRY: "Onboarding records retention",
+    CONTRACT: "Employment contract retention",
+    RESIGN: "Resignation certificate retention",
+    CERTIFICATE: "Employment certificate retention",
   };
   const categories: TemplateCategory[] = ["OFFER", "ENTRY", "CONTRACT", "RESIGN", "CERTIFICATE"];
   for (const category of categories) {
@@ -475,8 +484,8 @@ async function main() {
   if (admin && hr) {
     const acct = await prisma.account.upsert({
       where: { slug: "yunqi" },
-      update: { name: "云启信息科技（上海）有限公司" },
-      create: { name: "云启信息科技（上海）有限公司", slug: "yunqi" },
+      update: { name: "Yunqi Information Technology (Shanghai) Co., Ltd." },
+      create: { name: "Yunqi Information Technology (Shanghai) Co., Ltd.", slug: "yunqi" },
     });
     for (const [userId, role] of [
       [admin.id, "admin"],
